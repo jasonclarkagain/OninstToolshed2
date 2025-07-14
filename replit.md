@@ -1,0 +1,120 @@
+# OSINT Tool Shed
+
+## Overview
+
+This is a comprehensive OSINT (Open Source Intelligence) tool suite built as a full-stack web application. The application provides various intelligence-gathering tools for cybersecurity professionals and researchers, including domain enumeration, IP analysis, WHOIS lookups, and social media intelligence gathering.
+
+## User Preferences
+
+Preferred communication style: Simple, everyday language.
+
+## System Architecture
+
+### Frontend Architecture
+- **Framework**: React 18 with TypeScript
+- **Routing**: Wouter for lightweight client-side routing
+- **State Management**: TanStack Query (React Query) for server state management
+- **UI Framework**: Radix UI primitives with shadcn/ui components
+- **Styling**: Tailwind CSS with custom dark theme
+- **Build Tool**: Vite for fast development and optimized builds
+
+### Backend Architecture
+- **Runtime**: Node.js with Express.js server
+- **Language**: TypeScript throughout the entire stack
+- **Database**: PostgreSQL with Drizzle ORM
+- **Database Provider**: Neon Database (serverless PostgreSQL)
+- **API Design**: RESTful APIs with structured error handling
+- **Session Management**: PostgreSQL session store with express-session
+
+### Monorepo Structure
+The application follows a monorepo pattern with clear separation:
+- `/client` - React frontend application
+- `/server` - Express.js backend API
+- `/shared` - Shared types, schemas, and utilities
+
+## Key Components
+
+### OSINT Tools
+The application provides multiple intelligence-gathering tools:
+
+1. **Domain & Network Tools**
+   - Domain enumeration with subdomain discovery
+   - IP address analysis with geolocation
+   - WHOIS domain registration lookups
+   - Network tools (ping, traceroute, port scanning)
+
+2. **Social & Identity Tools**
+   - Username availability checking across platforms
+   - Email validation and breach checking
+
+3. **Data Analysis Tools**
+   - Hash analysis and identification
+   - Base64 encoding/decoding
+   - URL safety analysis
+
+4. **Search & Investigation Tools**
+   - Google dorking query generator
+
+### Database Schema
+The application uses three main database tables:
+
+1. **Users**: User authentication and management
+2. **OSINT Queries**: Stores all tool execution results and metadata
+3. **OSINT Reports**: Allows users to create and export investigation reports
+
+### Authentication System
+- Simple username/password authentication
+- Session-based authentication with PostgreSQL storage
+- User isolation for queries and reports
+
+## Data Flow
+
+1. **User Interaction**: Users interact with tool components in the React frontend
+2. **API Requests**: Frontend makes API calls to Express.js backend endpoints
+3. **Tool Execution**: Backend services execute OSINT tools and gather intelligence
+4. **Data Storage**: Results are stored in PostgreSQL with user association
+5. **Real-time Updates**: TanStack Query provides real-time result updates via polling
+
+## External Dependencies
+
+### Frontend Dependencies
+- **UI Components**: Extensive use of Radix UI primitives
+- **Styling**: Tailwind CSS with custom theming
+- **State Management**: TanStack Query for API state
+- **Form Handling**: React Hook Form with Zod validation
+- **Icons**: Lucide React icon library
+
+### Backend Dependencies
+- **Database**: Neon Database (serverless PostgreSQL)
+- **ORM**: Drizzle ORM for type-safe database operations
+- **Validation**: Zod for schema validation
+- **Session Storage**: connect-pg-simple for PostgreSQL session storage
+
+### Development Tools
+- **Build System**: Vite for frontend, esbuild for backend
+- **Type Checking**: TypeScript with strict configuration
+- **Database Migrations**: Drizzle Kit for schema management
+- **Development Environment**: Optimized for Replit with hot reloading
+
+## Deployment Strategy
+
+### Development Environment
+- **Frontend**: Vite dev server with HMR
+- **Backend**: tsx with automatic restart on file changes
+- **Database**: Neon Database with connection pooling
+- **Environment Variables**: DATABASE_URL for database connection
+
+### Production Build
+- **Frontend**: Vite build outputs to `dist/public`
+- **Backend**: esbuild bundles server code to `dist/index.js`
+- **Static Serving**: Express serves built frontend files
+- **Database**: Production PostgreSQL with migrations via Drizzle
+
+### Key Features
+- **Responsive Design**: Mobile-first responsive layout
+- **Dark Theme**: Custom dark theme implementation
+- **Error Handling**: Comprehensive error boundaries and API error handling
+- **Performance**: Optimized with React Query caching and Vite bundling
+- **Security**: Input validation, session management, and CSRF protection
+
+The application is designed to be a comprehensive OSINT toolkit while maintaining clean architecture, type safety, and excellent developer experience.
