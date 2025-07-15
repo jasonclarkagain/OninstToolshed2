@@ -13,6 +13,11 @@ import Base64Encoder from "@/components/tools/base64-encoder";
 import UrlAnalyzer from "@/components/tools/url-analyzer";
 import GoogleDorking from "@/components/tools/google-dorking";
 import NetworkTools from "@/components/tools/network-tools";
+import KaliLinuxVM from "@/components/tools/kali-linux-vm";
+import MetasploitInterface from "@/components/tools/metasploit-interface";
+import SocialEngineeringToolkit from "@/components/tools/social-engineering-toolkit";
+import VulnerabilityScanner from "@/components/tools/vulnerability-scanner";
+import OsintFramework from "@/components/tools/osint-framework";
 import ResultsPanel from "@/components/results-panel";
 import DisclaimerBanner from "@/components/disclaimer-banner";
 import { useQuery } from "@tanstack/react-query";
@@ -107,6 +112,23 @@ export default function Dashboard() {
                 <UrlAnalyzer />
                 <GoogleDorking />
                 <NetworkTools />
+              </section>
+            )}
+
+            {activeSection === "kali-vm" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">Kali Linux Virtual Machine</h2>
+                <KaliLinuxVM />
+              </section>
+            )}
+
+            {activeSection === "advanced-security" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">Advanced Security Framework</h2>
+                <MetasploitInterface />
+                <SocialEngineeringToolkit />
+                <VulnerabilityScanner />
+                <OsintFramework />
               </section>
             )}
 

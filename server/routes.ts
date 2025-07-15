@@ -892,6 +892,352 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Kali Linux VM terminal endpoint
+  app.post("/api/osint/kali-vm", async (req, res) => {
+    try {
+      const { command, directory } = z.object({
+        command: z.string().min(1),
+        directory: z.string().default('~')
+      }).parse(req.body);
+
+      const query = await storage.createOsintQuery({
+        toolType: 'kali_vm',
+        query: command,
+        status: 'pending'
+      });
+
+      // Simulate Kali Linux command execution
+      const result = await simulateKaliCommand(command, directory);
+      
+      await storage.updateOsintQuery(query.id, {
+        result: result,
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      res.json({ queryId: query.id, result });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
+}
+
+// Kali Linux command simulation
+async function simulateKaliCommand(command: string, directory: string) {
+  const cmd = command.toLowerCase().trim();
+  let output = '';
+  let success = true;
+  let currentDirectory = directory;
+
+  // System commands
+  if (cmd === 'uname -a') {
+    output = 'Linux kali 6.1.0-kali9-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.1.27-1kali1 (2023-05-12) x86_64 GNU/Linux';
+  } else if (cmd === 'whoami') {
+    output = 'kali';
+  } else if (cmd === 'pwd') {
+    output = directory === '~' ? '/home/kali' : directory;
+  } else if (cmd.startsWith('cd ')) {
+    const targetDir = cmd.substring(3).trim();
+    currentDirectory = targetDir || '~';
+    output = '';
+  } else if (cmd === 'ls' || cmd === 'ls -la') {
+    output = `total 48
+drwxr-xr-x 1 kali kali  4096 Jul 15 00:33 .
+drwxr-xr-x 1 root root  4096 Jul 15 00:30 ..
+-rw-r--r-- 1 kali kali   220 Jul 15 00:30 .bash_logout
+-rw-r--r-- 1 kali kali  3526 Jul 15 00:30 .bashrc
+drwxr-xr-x 1 kali kali  4096 Jul 15 00:30 .cache
+drwxr-xr-x 1 kali kali  4096 Jul 15 00:30 .config
+drwxr-xr-x 1 kali kali  4096 Jul 15 00:30 Desktop
+drwxr-xr-x 1 kali kali  4096 Jul 15 00:30 Documents
+drwxr-xr-x 1 kali kali  4096 Jul 15 00:30 Downloads
+-rw-r--r-- 1 kali kali   807 Jul 15 00:30 .profile
+drwxr-xr-x 1 kali kali  4096 Jul 15 00:30 tools`;
+
+  // Network scanning commands
+  } else if (cmd.startsWith('nmap')) {
+    if (cmd.includes('-sn') && cmd.includes('192.168.1.0/24')) {
+      output = `Starting Nmap 7.94 ( https://nmap.org ) at 2025-07-15 00:33 UTC
+Nmap scan report for 192.168.1.1
+Host is up (0.0010s latency).
+Nmap scan report for 192.168.1.100
+Host is up (0.0001s latency).
+Nmap scan report for 192.168.1.105
+Host is up (0.0015s latency).
+Nmap scan report for 192.168.1.110
+Host is up (0.0008s latency).
+Nmap done: 256 IP addresses (4 hosts up) scanned in 2.85 seconds`;
+    } else {
+      output = `Starting Nmap 7.94 ( https://nmap.org ) at 2025-07-15 00:33 UTC
+Nmap scan report for target (192.168.1.100)
+Host is up (0.0001s latency).
+
+PORT     STATE SERVICE
+22/tcp   open  ssh
+80/tcp   open  http
+443/tcp  open  https
+3389/tcp open  ms-wbt-server
+
+Nmap done: 1 IP address (1 host up) scanned in 1.85 seconds`;
+    }
+
+  // Metasploit commands
+  } else if (cmd === 'msfconsole') {
+    output = `
+                          ########                  #
+                      #################            #
+                   ######################         #
+                  #########################      #
+                ############################
+               ##############################
+              ###############################
+             ###############################
+             ##############################
+                          #    ########   #
+                            ##############
+                            ##############
+                              ############
+                              ############
+                                ##########
+                                ##########
+                                  ######
+
+     METASPLOIT
+
+     =[ metasploit v6.3.31-dev-4e5ed779]
++ -- --=[ 2357 exploits - 1220 auxiliary - 413 post       ]
++ -- --=[ 1391 payloads - 46 encoders - 11 nops           ]
++ -- --=[ 9 evasion                                        ]
+
+Metasploit tip: Enable HTTP request and response logging
+with set HttpTrace true
+
+msf6 > `;
+
+  // WiFi tools
+  } else if (cmd.includes('aircrack-ng')) {
+    output = `Aircrack-ng 1.7
+
+  usage: aircrack-ng [options] <input file(s)>
+
+  Common options:
+
+      -a <amode> : force attack mode (1/WEP, 2/WPA-PSK)
+      -e <essid> : target selection: network identifier
+      -b <bssid> : target selection: access point's MAC
+      -p <nbcpu> : # of CPU to use  (default: all CPUs)
+      -q         : enable quiet mode (no status output)
+      -C <macs>  : merge the given APs to a virtual one
+      -l <file>  : write key to file. Overwrites file.`;
+
+  // Web scanning
+  } else if (cmd.includes('nikto')) {
+    output = `- Nikto v2.5.0
+---------------------------------------------------------------------------
++ Target IP:          127.0.0.1
++ Target Hostname:    localhost
++ Target Port:        80
++ Start Time:         2025-07-15 00:33:15 (GMT0)
+---------------------------------------------------------------------------
++ Server: Apache/2.4.56 (Debian)
++ Retrieved x-powered-by header: PHP/8.1.12
++ The anti-clickjacking X-Frame-Options header is not present.
++ The X-XSS-Protection header is not defined.
++ The X-Content-Type-Options header is not set.
++ Root page / redirects to: login.php
++ No CGI Directories found (use '-C all' to force check all possible dirs)
++ Apache/2.4.56 appears to be outdated (current is at least Apache/2.4.58).
++ Allowed HTTP Methods: GET, POST, OPTIONS, HEAD 
++ /admin/: Admin login page/section found.
++ /config.php: PHP Config file may contain database IDs and passwords.
++ 26522 requests: 0 error(s) and 8 item(s) reported on remote host
++ End Time:           2025-07-15 00:33:45 (GMT0) (30 seconds)`;
+
+  // Password cracking
+  } else if (cmd.includes('john')) {
+    output = `John the Ripper 1.9.0-jumbo-1 (linux-gnu 64-bit x86_64 AVX2 AC)
+Copyright (c) 1996-2021 by Solar Designer and others
+Homepage: https://www.openwall.com/john/
+
+Usage: john [OPTIONS] [PASSWORD-FILES]
+
+--help                     print usage summary
+--single[=SECTION]         "single crack" mode
+--wordlist[=FILE] --stdin  wordlist mode, read words from FILE or stdin
+--pipe                     like --stdin, but bulk reads, and allows rules
+--loopback[=FILE]          like --wordlist, but fetch words from a .pot file
+--dupe-suppression         suppress all dupes in wordlist (and force preload)
+--prince[=FILE]            PRINCE mode, read words from FILE
+--encoding=NAME            input encoding (eg. UTF-8, ISO-8859-1). See also
+                           doc/ENCODINGS and --list=hidden-options.`;
+
+  // SQL injection
+  } else if (cmd.includes('sqlmap')) {
+    output = `        ___
+       __H__
+ ___ ___[)]_____ ___ ___  {1.7.7#stable}
+|_ -| . [)]     | .'| . |
+|___|_  [.]_|_|_|__,|  _|
+      |_|V...       |_|   https://sqlmap.org
+
+Usage: python3 sqlmap [options]
+
+Options:
+  -h, --help            Show basic help message and exit
+  -hh                   Show advanced help message and exit
+  --version             Show program's version number and exit
+  -v VERBOSE            Verbosity level: 0-6 (default 1)
+
+  Target:
+    At least one of these options has to be provided to define the
+    target(s)
+
+    -u URL, --url=URL   Target URL (e.g. "http://www.site.com/vuln.php?id=1")`;
+
+  // Burp Suite
+  } else if (cmd === 'burpsuite') {
+    output = `Starting Burp Suite Professional...
+Burp Suite is starting up. Please wait...
+[INFO] Loading Burp extensions...
+[INFO] Burp Suite Community Edition started successfully
+[INFO] Proxy listening on 127.0.0.1:8080
+[INFO] Web interface available at http://127.0.0.1:8080`;
+
+  // System information
+  } else if (cmd === 'ip addr' || cmd === 'ifconfig') {
+    output = `1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 08:00:27:ab:cd:ef brd ff:ff:ff:ff:ff:ff
+    inet 192.168.1.100/24 brd 192.168.1.255 scope global dynamic eth0
+       valid_lft 86395sec preferred_lft 86395sec`;
+
+  } else if (cmd === 'ps aux' || cmd === 'ps -ef') {
+    output = `USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root           1  0.0  0.1  22528  2048 ?        Ss   00:30   0:01 /sbin/init
+root           2  0.0  0.0      0     0 ?        S    00:30   0:00 [kthreadd]
+kali        1337  0.0  0.2  12345  4096 pts/0    S    00:30   0:00 bash
+kali        1410  2.1  8.4 234567 16384 pts/0    S    00:33   0:01 msfconsole
+kali        1523  0.0  0.1  10236  2048 pts/0    R    00:33   0:00 ps aux`;
+
+  } else if (cmd === 'netstat -tulpn') {
+    output = `Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name    
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      845/sshd: /usr/sbin 
+tcp        0      0 127.0.0.1:3306          0.0.0.0:*               LISTEN      1203/mysqld         
+tcp        0      0 0.0.0.0:80              0.0.0.0:*               LISTEN      1104/apache2        
+tcp        0      0 0.0.0.0:443             0.0.0.0:*               LISTEN      1104/apache2        
+tcp6       0      0 :::22                   :::*                    LISTEN      845/sshd: /usr/sbin 
+udp        0      0 0.0.0.0:68              0.0.0.0:*                           567/dhclient`;
+
+  } else if (cmd === 'df -h') {
+    output = `Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1       512G  156G  330G  32% /
+tmpfs           8.0G     0  8.0G   0% /dev/shm
+tmpfs           8.0G  1.2M  8.0G   1% /run
+tmpfs           8.0G     0  8.0G   0% /sys/fs/cgroup
+/dev/sda2       2.0G   12M  1.9G   1% /boot`;
+
+  } else if (cmd === 'free -h') {
+    output = `               total        used        free      shared  buff/cache   available
+Mem:            16Gi       8.2Gi       4.1Gi       456Mi       3.7Gi       7.2Gi
+Swap:          2.0Gi          0B       2.0Gi`;
+
+  } else if (cmd === 'lscpu') {
+    output = `Architecture:                    x86_64
+CPU op-mode(s):                  32-bit, 64-bit
+Byte Order:                      Little Endian
+Address sizes:                   39 bits physical, 48 bits virtual
+CPU(s):                          8
+On-line CPU(s) list:             0-7
+Thread(s) per core:              2
+Core(s) per socket:              4
+Socket(s):                       1
+NUMA node(s):                    1
+Vendor ID:                       GenuineIntel
+CPU family:                      6
+Model:                           151
+Model name:                      12th Gen Intel(R) Core(TM) i7-12700K
+Stepping:                        2
+CPU MHz:                         3600.000
+CPU max MHz:                     5000.0000
+CPU min MHz:                     800.0000`;
+
+  } else if (cmd === 'cat /etc/os-release') {
+    output = `PRETTY_NAME="Kali GNU/Linux Rolling"
+NAME="Kali GNU/Linux"
+VERSION_ID="2024.1"
+VERSION="2024.1"
+VERSION_CODENAME=kali-rolling
+ID=kali
+ID_LIKE=debian
+HOME_URL="https://www.kali.org/"
+SUPPORT_URL="https://forums.kali.org/"
+BUG_REPORT_URL="https://bugs.kali.org/"`;
+
+  } else if (cmd === 'history') {
+    output = `    1  uname -a
+    2  whoami
+    3  nmap -sn 192.168.1.0/24
+    4  msfconsole
+    5  aircrack-ng --help
+    6  nikto -h localhost
+    7  john --help
+    8  sqlmap --help
+    9  ps aux
+   10  netstat -tulpn`;
+
+  } else if (cmd === 'clear') {
+    output = '';
+
+  } else if (cmd.startsWith('echo ')) {
+    output = cmd.substring(5);
+
+  } else if (cmd === 'date') {
+    output = new Date().toString();
+
+  } else if (cmd === 'uptime') {
+    output = ` 00:33:45 up 3 min,  1 user,  load average: 0.23, 0.15, 0.08`;
+
+  } else if (cmd.includes('help') || cmd === '--help') {
+    output = `Kali Linux Terminal Help:
+
+System Commands:
+  uname -a          - System information
+  whoami           - Current user
+  pwd              - Current directory
+  ls               - List directory contents
+  cd <dir>         - Change directory
+  ps aux           - List processes
+  netstat -tulpn   - Network connections
+  df -h            - Disk usage
+  free -h          - Memory usage
+  
+Network Tools:
+  nmap <target>    - Network scanner
+  nikto -h <host>  - Web vulnerability scanner
+  aircrack-ng      - WiFi security tools
+  
+Exploitation:
+  msfconsole       - Metasploit framework
+  john             - Password cracker
+  sqlmap           - SQL injection tool
+  burpsuite        - Web application security`;
+
+  } else {
+    output = `bash: ${command}: command not found`;
+    success = false;
+  }
+
+  return {
+    output: output || ' ',
+    success,
+    currentDirectory,
+    timestamp: new Date().toISOString()
+  };
 }
