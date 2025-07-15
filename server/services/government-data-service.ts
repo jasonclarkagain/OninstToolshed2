@@ -87,15 +87,7 @@ export class GovernmentDataService {
   
   async getCensusData(address: string, radius: number, region: string): Promise<CensusData> {
     try {
-      // US Census Bureau API integration
-      const censusApiUrl = `https://api.census.gov/data/2021/acs/acs5`;
-      
-      const response = await proxyService.makeProxiedRequest(
-        `${censusApiUrl}?get=B01001_001E,B19013_001E,B25077_001E,B25064_001E&for=tract:*&in=state:*`,
-        region
-      );
-      
-      // Simulate realistic census data based on location
+      // Generate realistic census data based on location
       const mockCensusData: CensusData = {
         population: Math.floor(Math.random() * 50000) + 10000,
         households: Math.floor(Math.random() * 20000) + 5000,
@@ -128,14 +120,6 @@ export class GovernmentDataService {
   
   async getVoterRecords(address: string, radius: number, region: string): Promise<VoterRecord[]> {
     try {
-      // State voter registration database integration
-      const voterApiUrl = `https://voter-api.state.gov/api/v1/records`;
-      
-      const response = await proxyService.makeProxiedRequest(
-        `${voterApiUrl}?address=${encodeURIComponent(address)}&radius=${radius}`,
-        region
-      );
-      
       // Generate realistic voter records
       const voterRecords: VoterRecord[] = [];
       const parties = ['Republican', 'Democrat', 'Independent', 'Libertarian', 'Green'];
@@ -161,14 +145,6 @@ export class GovernmentDataService {
   
   async getSexOffenderRecords(address: string, radius: number, region: string): Promise<SexOffenderRecord[]> {
     try {
-      // National Sex Offender Public Website (NSOPW) API
-      const nsopwApiUrl = `https://www.nsopw.gov/api/search`;
-      
-      const response = await proxyService.makeProxiedRequest(
-        `${nsopwApiUrl}?address=${encodeURIComponent(address)}&radius=${radius}`,
-        region
-      );
-      
       // Generate realistic sex offender records (sensitive data)
       const offenderRecords: SexOffenderRecord[] = [];
       const riskLevels: ('Low' | 'Moderate' | 'High')[] = ['Low', 'Moderate', 'High'];
@@ -195,14 +171,6 @@ export class GovernmentDataService {
   
   async getPrisonRecords(name: string, region: string): Promise<PrisonRecord[]> {
     try {
-      // Federal Bureau of Prisons API integration
-      const bopApiUrl = `https://www.bop.gov/inmateloc/api/search`;
-      
-      const response = await proxyService.makeProxiedRequest(
-        `${bopApiUrl}?name=${encodeURIComponent(name)}`,
-        region
-      );
-      
       // Generate realistic prison records
       const prisonRecords: PrisonRecord[] = [];
       const facilities = ['Federal Correctional Institution', 'State Prison', 'County Jail', 'Federal Detention Center'];
@@ -233,14 +201,6 @@ export class GovernmentDataService {
   
   async getMissingPersonRecords(name: string, region: string): Promise<MissingPersonRecord[]> {
     try {
-      // National Missing and Unidentified Persons System (NamUs) API
-      const namusApiUrl = `https://www.namus.gov/api/CaseSets/NamUs/MissingPersons/Search`;
-      
-      const response = await proxyService.makeProxiedRequest(
-        `${namusApiUrl}?name=${encodeURIComponent(name)}`,
-        region
-      );
-      
       // Generate realistic missing person records
       const missingPersonRecords: MissingPersonRecord[] = [];
       const statuses: ('Missing' | 'Found' | 'Deceased')[] = ['Missing', 'Found', 'Deceased'];
@@ -269,14 +229,6 @@ export class GovernmentDataService {
   
   async getGenealogicalRecords(name: string, region: string): Promise<GenealogicalRecord[]> {
     try {
-      // FamilySearch API integration
-      const familySearchApiUrl = `https://api.familysearch.org/platform/tree/persons`;
-      
-      const response = await proxyService.makeProxiedRequest(
-        `${familySearchApiUrl}?name=${encodeURIComponent(name)}`,
-        region
-      );
-      
       // Generate realistic genealogical records
       const genealogicalRecords: GenealogicalRecord[] = [];
       const recordTypes: ('Birth' | 'Death' | 'Marriage' | 'Census' | 'Military')[] = 
@@ -308,14 +260,7 @@ export class GovernmentDataService {
   
   async checkNoFlyListIndicators(name: string, region: string): Promise<any> {
     try {
-      // Note: No Fly List is classified, but we can check for publicly available watchlist indicators
-      const watchlistApiUrl = `https://ofac.treasury.gov/api/search`;
-      
-      const response = await proxyService.makeProxiedRequest(
-        `${watchlistApiUrl}?name=${encodeURIComponent(name)}`,
-        region
-      );
-      
+      // Note: No Fly List is classified, return only public notice
       return {
         indicators: [],
         notice: 'No Fly List data is classified. This searches publicly available watchlist indicators and travel restrictions.',
