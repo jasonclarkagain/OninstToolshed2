@@ -21,9 +21,15 @@ import OsintFramework from "@/components/tools/osint-framework";
 import IntelligenceDashboard from "@/components/intelligence-dashboard";
 import AdvancedReporting from "@/components/advanced-reporting";
 import WorkflowAutomation from "@/components/workflow-automation";
+import AnalyticsDashboard from "@/components/analytics-dashboard";
+import CollaborationWorkspace from "@/components/collaboration-workspace";
+import AdvancedSearch from "@/components/advanced-search";
+import AIAnalysis from "@/components/ai-analysis";
+import MobileDashboard from "@/components/mobile-dashboard";
 import ResultsPanel from "@/components/results-panel";
 import DisclaimerBanner from "@/components/disclaimer-banner";
 import { useQuery } from "@tanstack/react-query";
+import { useMobile } from "@/hooks/use-mobile";
 
 export default function Dashboard() {
   const [activeSection, setActiveSection] = useState("domain-network");
@@ -153,6 +159,41 @@ export default function Dashboard() {
               <section className="space-y-6">
                 <h2 className="text-2xl font-bold mb-6 text-white">Workflow Automation</h2>
                 <WorkflowAutomation />
+              </section>
+            )}
+
+            {activeSection === "analytics" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">Performance Analytics</h2>
+                <AnalyticsDashboard />
+              </section>
+            )}
+
+            {activeSection === "collaboration" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">Team Collaboration</h2>
+                <CollaborationWorkspace />
+              </section>
+            )}
+
+            {activeSection === "search" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">Advanced Search</h2>
+                <AdvancedSearch />
+              </section>
+            )}
+
+            {activeSection === "ai-analysis" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">AI Security Analysis</h2>
+                <AIAnalysis />
+              </section>
+            )}
+
+            {activeSection === "mobile" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">Mobile Dashboard</h2>
+                <MobileDashboard />
               </section>
             )}
 

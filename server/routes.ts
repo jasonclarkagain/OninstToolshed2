@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { osintService } from "./services/osint";
 import { governmentDataService } from "./services/government-data-service";
 import { proxyService } from "./services/proxy-service";
+import { aiService } from "./services/ai-service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Domain enumeration endpoint
@@ -994,6 +995,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  // AI Analysis endpoints
+  app.post("/api/ai/analyze", async (req, res) => {
+    try {
+      const queries = await storage.getUserQueries();
+      const analysis = await aiService.analyzeSecurityData(queries);
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error('AI analysis error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'AI analysis failed',
+        fallback: {
+          summary: 'AI analysis temporarily unavailable - using local analysis',
+          insights: [],
+          overallRiskScore: 0,
+          priorityActions: ['Configure OpenAI API key for AI-powered analysis'],
+          correlations: []
+        }
+      });
+    }
+  });
+
+  app.post("/api/ai/chat", async (req, res) => {
+    try {
+      const { message } = z.object({
+        message: z.string().min(1)
+      }).parse(req.body);
+
+      const queries = await storage.getUserQueries();
+      const response = await aiService.processNaturalLanguageQuery(message, queries);
+      
+      res.json(response);
+    } catch (error) {
+      console.error('AI chat error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'AI chat failed',
+        fallback: {
+          interpretation: 'AI chat temporarily unavailable',
+          suggestedActions: ['Configure OpenAI API key for AI-powered chat'],
+          relevantFindings: [],
+          confidence: 0
+        }
+      });
+    }
+  });
+
+  app.post("/api/ai/recommendations", async (req, res) => {
+    try {
+      const { findings } = z.object({
+        findings: z.array(z.any())
+      }).parse(req.body);
+
+      const recommendations = await aiService.generateSecurityRecommendations(findings);
+      
+      res.json(recommendations);
+    } catch (error) {
+      console.error('AI recommendations error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'AI recommendations failed',
+        fallback: {
+          recommendations: ['Configure OpenAI API key for AI-powered recommendations'],
+          priorityLevel: 'medium' as const,
+          estimatedEffort: 'Configuration required',
+          timeline: 'Immediate'
+        }
+      });
+    }
+  });
+
   return httpServer;
 }
 

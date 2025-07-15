@@ -92,7 +92,14 @@ export class DatabaseStorage implements IStorage {
   async createReport(insertReport: InsertOsintReport): Promise<OsintReport> {
     const [report] = await db
       .insert(osintReports)
-      .values([insertReport])
+      .values({
+        title: insertReport.title,
+        description: insertReport.description,
+        queryIds: insertReport.queryIds || [],
+        format: insertReport.format || 'json',
+        isPublic: insertReport.isPublic || false,
+        tags: insertReport.tags || []
+      })
       .returning();
     return report;
   }
