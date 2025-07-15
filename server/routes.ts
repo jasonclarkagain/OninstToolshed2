@@ -503,6 +503,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // WiFi password cracking endpoint
+  app.post("/api/osint/wifi-crack", async (req, res) => {
+    try {
+      const { target, interface: wifiInterface, attackType, wordlist, customWordlist, handshakeFile } = z.object({
+        target: z.string().min(1),
+        interface: z.string().default("wlan0"),
+        attackType: z.string().default("dictionary"),
+        wordlist: z.string().optional(),
+        customWordlist: z.string().optional(),
+        handshakeFile: z.string().optional()
+      }).parse(req.body);
+
+      const query = await storage.createOsintQuery({
+        toolType: 'wifi_crack',
+        query: target,
+        status: 'pending'
+      });
+
+      // Simulate WiFi password cracking results
+      const result = {
+        target,
+        interface: wifiInterface,
+        attackType,
+        wordlist: wordlist || 'rockyou.txt',
+        progress: 100,
+        success: Math.random() > 0.7, // 30% success rate
+        password: Math.random() > 0.7 ? 'password123' : null,
+        timeElapsed: `${Math.floor(Math.random() * 30) + 5} minutes`,
+        keysAttempted: Math.floor(Math.random() * 50000) + 10000,
+        method: attackType,
+        handshakeCaptured: true,
+        securityType: 'WPA2-PSK',
+        signalStrength: -Math.floor(Math.random() * 40) - 30
+      };
+      
+      await storage.updateOsintQuery(query.id, {
+        result: result,
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      res.json({ queryId: query.id, result });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // WiFi security scanning endpoint
+  app.post("/api/osint/wifi-security", async (req, res) => {
+    try {
+      const { scanType, interface: wifiInterface, target } = z.object({
+        scanType: z.string().default("passive"),
+        interface: z.string().default("wlan0"),
+        target: z.string().optional()
+      }).parse(req.body);
+
+      const query = await storage.createOsintQuery({
+        toolType: 'wifi_security',
+        query: target || 'WiFi Security Scan',
+        status: 'pending'
+      });
+
+      // Simulate WiFi security scan results
+      const networks = Array.from({ length: Math.floor(Math.random() * 15) + 5 }, (_, i) => ({
+        ssid: `Network_${Math.floor(Math.random() * 1000)}`,
+        bssid: Array.from({ length: 6 }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join(':'),
+        channel: Math.floor(Math.random() * 11) + 1,
+        frequency: `${2412 + (Math.floor(Math.random() * 11) * 5)} MHz`,
+        signal: -Math.floor(Math.random() * 40) - 30,
+        security: ['Open', 'WEP', 'WPA', 'WPA2', 'WPA3'][Math.floor(Math.random() * 5)],
+        quality: Math.floor(Math.random() * 100),
+        encryption: ['None', 'WEP', 'TKIP', 'CCMP', 'CCMP+TKIP'][Math.floor(Math.random() * 5)],
+        wps: Math.random() > 0.7,
+        clients: Math.floor(Math.random() * 10),
+        vendor: ['Cisco', 'Netgear', 'Linksys', 'TP-Link', 'ASUS'][Math.floor(Math.random() * 5)]
+      }));
+
+      const result = {
+        scanType,
+        interface: wifiInterface,
+        networksFound: networks.length,
+        networks,
+        vulnerabilities: networks.filter(n => n.security === 'Open' || n.security === 'WEP').map(n => ({
+          ssid: n.ssid,
+          vulnerability: n.security === 'Open' ? 'Open Network' : 'WEP Encryption',
+          severity: n.security === 'Open' ? 'High' : 'Critical',
+          recommendation: n.security === 'Open' ? 'Enable WPA2/WPA3 encryption' : 'Upgrade to WPA2/WPA3'
+        })),
+        scanDuration: `${Math.floor(Math.random() * 300) + 30} seconds`,
+        timestamp: new Date().toISOString()
+      };
+      
+      await storage.updateOsintQuery(query.id, {
+        result: result,
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      res.json({ queryId: query.id, result });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
