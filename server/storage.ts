@@ -1,4 +1,6 @@
-import { users, osintQueries, osintReports, type User, type InsertUser, type OsintQuery, type InsertOsintQuery, type OsintReport, type InsertOsintReport } from "@shared/schema";
+import { users, osintQueries, osintReports, toolConfigs, apiKeys, auditLogs, type User, type InsertUser, type OsintQuery, type InsertOsintQuery, type OsintReport, type InsertOsintReport, type ToolConfig, type InsertToolConfig, type ApiKey, type InsertApiKey, type AuditLog, type InsertAuditLog } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc, and } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -12,91 +14,156 @@ export interface IStorage {
   
   createReport(report: InsertOsintReport): Promise<OsintReport>;
   getUserReports(userId?: number): Promise<OsintReport[]>;
+  
+  // Tool configuration management
+  getToolConfig(userId: number, toolType: string): Promise<ToolConfig | undefined>;
+  saveToolConfig(config: InsertToolConfig): Promise<ToolConfig>;
+  
+  // API key management
+  getApiKey(userId: number, service: string): Promise<ApiKey | undefined>;
+  saveApiKey(apiKey: InsertApiKey): Promise<ApiKey>;
+  
+  // Audit logging
+  logAudit(audit: InsertAuditLog): Promise<AuditLog>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private osintQueries: Map<number, OsintQuery>;
-  private osintReports: Map<number, OsintReport>;
-  private currentUserId: number;
-  private currentQueryId: number;
-  private currentReportId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.osintQueries = new Map();
-    this.osintReports = new Map();
-    this.currentUserId = 1;
-    this.currentQueryId = 1;
-    this.currentReportId = 1;
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values({
+        ...insertUser,
+        role: 'user',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
     return user;
   }
 
   async createOsintQuery(insertQuery: InsertOsintQuery): Promise<OsintQuery> {
-    const id = this.currentQueryId++;
-    const query: OsintQuery = {
-      ...insertQuery,
-      id,
-      userId: null,
-      createdAt: new Date(),
-      completedAt: null,
-    };
-    this.osintQueries.set(id, query);
+    const [query] = await db
+      .insert(osintQueries)
+      .values({
+        ...insertQuery,
+        priority: insertQuery.priority || 'normal',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
     return query;
   }
 
   async updateOsintQuery(id: number, updates: Partial<OsintQuery>): Promise<OsintQuery | undefined> {
-    const query = this.osintQueries.get(id);
-    if (!query) return undefined;
-    
-    const updatedQuery = { ...query, ...updates };
-    this.osintQueries.set(id, updatedQuery);
-    return updatedQuery;
+    const [query] = await db
+      .update(osintQueries)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(osintQueries.id, id))
+      .returning();
+    return query || undefined;
   }
 
   async getOsintQuery(id: number): Promise<OsintQuery | undefined> {
-    return this.osintQueries.get(id);
+    const [query] = await db.select().from(osintQueries).where(eq(osintQueries.id, id));
+    return query || undefined;
   }
 
   async getUserQueries(userId?: number): Promise<OsintQuery[]> {
-    return Array.from(this.osintQueries.values())
-      .filter(query => userId ? query.userId === userId : true)
-      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+    const query = db.select().from(osintQueries);
+    
+    if (userId) {
+      query.where(eq(osintQueries.userId, userId));
+    }
+    
+    return query.orderBy(desc(osintQueries.createdAt));
   }
 
   async createReport(insertReport: InsertOsintReport): Promise<OsintReport> {
-    const id = this.currentReportId++;
-    const report: OsintReport = {
-      ...insertReport,
-      id,
-      userId: null,
-      exportedAt: new Date(),
-    };
-    this.osintReports.set(id, report);
+    const [report] = await db
+      .insert(osintReports)
+      .values({
+        ...insertReport,
+        version: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        exportedAt: new Date()
+      })
+      .returning();
     return report;
   }
 
   async getUserReports(userId?: number): Promise<OsintReport[]> {
-    return Array.from(this.osintReports.values())
-      .filter(report => userId ? report.userId === userId : true)
-      .sort((a, b) => (b.exportedAt?.getTime() || 0) - (a.exportedAt?.getTime() || 0));
+    const query = db.select().from(osintReports);
+    
+    if (userId) {
+      query.where(eq(osintReports.userId, userId));
+    }
+    
+    return query.orderBy(desc(osintReports.exportedAt));
+  }
+
+  async getToolConfig(userId: number, toolType: string): Promise<ToolConfig | undefined> {
+    const [config] = await db
+      .select()
+      .from(toolConfigs)
+      .where(and(eq(toolConfigs.userId, userId), eq(toolConfigs.toolType, toolType)));
+    return config || undefined;
+  }
+
+  async saveToolConfig(config: InsertToolConfig): Promise<ToolConfig> {
+    const [savedConfig] = await db
+      .insert(toolConfigs)
+      .values({
+        ...config,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return savedConfig;
+  }
+
+  async getApiKey(userId: number, service: string): Promise<ApiKey | undefined> {
+    const [apiKey] = await db
+      .select()
+      .from(apiKeys)
+      .where(and(eq(apiKeys.userId, userId), eq(apiKeys.service, service), eq(apiKeys.isActive, true)));
+    return apiKey || undefined;
+  }
+
+  async saveApiKey(apiKey: InsertApiKey): Promise<ApiKey> {
+    const [savedKey] = await db
+      .insert(apiKeys)
+      .values({
+        ...apiKey,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return savedKey;
+  }
+
+  async logAudit(audit: InsertAuditLog): Promise<AuditLog> {
+    const [auditLog] = await db
+      .insert(auditLogs)
+      .values({
+        ...audit,
+        timestamp: new Date()
+      })
+      .returning();
+    return auditLog;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
