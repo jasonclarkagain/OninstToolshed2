@@ -1,4 +1,4 @@
-import { Globe, Users, Code, Search, Shield, TrendingUp, FileText, Workflow, Activity, MessageSquare, Filter, Brain, Smartphone } from "lucide-react";
+import { Globe, Users, Code, Search, Shield, TrendingUp, FileText, Workflow, Activity, MessageSquare, Filter, Brain, Smartphone, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -27,6 +27,7 @@ export default function Sidebar({ activeSection, onSectionChange, stats }: Sideb
     { id: "search", label: "Advanced Search", icon: Filter },
     { id: "ai-analysis", label: "AI Security Analysis", icon: Brain },
     { id: "mobile", label: "Mobile Dashboard", icon: Smartphone },
+    { id: "multi-factor", label: "Multi-Factor Analysis", icon: Layers },
   ];
 
   return (

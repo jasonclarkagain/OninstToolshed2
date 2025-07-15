@@ -6,6 +6,7 @@ import { osintService } from "./services/osint";
 import { governmentDataService } from "./services/government-data-service";
 import { proxyService } from "./services/proxy-service";
 import { aiService } from "./services/ai-service";
+import { multiFactorAnalyzer } from "./services/multi-factor-analyzer";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Domain enumeration endpoint
@@ -1060,6 +1061,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
           estimatedEffort: 'Configuration required',
           timeline: 'Immediate'
         }
+      });
+    }
+  });
+
+  // Multi-Factor Analysis endpoints
+  app.post("/api/multi-factor/analyze", async (req, res) => {
+    try {
+      const config = z.object({
+        timeRange: z.string().optional(),
+        minConfidence: z.number().optional(),
+        analysisType: z.string().optional()
+      }).parse(req.body);
+
+      const queries = await storage.getUserQueries();
+      const analysis = await multiFactorAnalyzer.analyzeQueries(queries, config);
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error('Multi-factor analysis error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Multi-factor analysis failed'
+      });
+    }
+  });
+
+  app.get("/api/multi-factor/correlations", async (req, res) => {
+    try {
+      const { minConfidence = 75 } = req.query;
+      
+      const queries = await storage.getUserQueries();
+      const analysis = await multiFactorAnalyzer.analyzeQueries(queries, {
+        minConfidence: Number(minConfidence)
+      });
+      
+      res.json({ correlations: analysis.correlations });
+    } catch (error) {
+      console.error('Correlation analysis error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Correlation analysis failed'
+      });
+    }
+  });
+
+  app.get("/api/multi-factor/patterns", async (req, res) => {
+    try {
+      const queries = await storage.getUserQueries();
+      const analysis = await multiFactorAnalyzer.analyzeQueries(queries);
+      
+      res.json({ patterns: analysis.patterns });
+    } catch (error) {
+      console.error('Pattern analysis error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Pattern analysis failed'
       });
     }
   });

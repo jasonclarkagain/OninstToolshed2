@@ -26,6 +26,7 @@ import CollaborationWorkspace from "@/components/collaboration-workspace";
 import AdvancedSearch from "@/components/advanced-search";
 import AIAnalysis from "@/components/ai-analysis";
 import MobileDashboard from "@/components/mobile-dashboard";
+import MultiFactorAnalysis from "@/components/multi-factor-analysis";
 import ResultsPanel from "@/components/results-panel";
 import DisclaimerBanner from "@/components/disclaimer-banner";
 import { useQuery } from "@tanstack/react-query";
@@ -194,6 +195,13 @@ export default function Dashboard() {
               <section className="space-y-6">
                 <h2 className="text-2xl font-bold mb-6 text-white">Mobile Dashboard</h2>
                 <MobileDashboard />
+              </section>
+            )}
+
+            {activeSection === "multi-factor" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">Multi-Factor Analysis</h2>
+                <MultiFactorAnalysis />
               </section>
             )}
 
