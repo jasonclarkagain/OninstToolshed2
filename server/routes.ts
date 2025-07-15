@@ -7,6 +7,7 @@ import { governmentDataService } from "./services/government-data-service";
 import { proxyService } from "./services/proxy-service";
 import { aiService } from "./services/ai-service";
 import { multiFactorAnalyzer } from "./services/multi-factor-analyzer";
+import { enhancedCorrelationEngine } from "./services/enhanced-correlation-engine";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Domain enumeration endpoint
@@ -486,7 +487,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const report = await storage.createReport({
         title,
-        queryIds
+        queryIds,
+        format: 'json',
+        isPublic: false,
+        tags: ['export']
       });
 
       res.json(report);
@@ -914,7 +918,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const report = await storage.createReport({
         title: reportConfig.title,
         queryIds: [],
-        format: reportConfig.format
+        format: reportConfig.format,
+        isPublic: false,
+        tags: ['advanced-report']
       });
 
       res.json({ 
@@ -1114,6 +1120,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Pattern analysis error:', error);
       res.status(500).json({ 
         error: error instanceof Error ? error.message : 'Pattern analysis failed'
+      });
+    }
+  });
+
+  // Enhanced Threat Intelligence endpoints
+  app.post("/api/threat-intelligence/analyze", async (req, res) => {
+    try {
+      const { comprehensive = false } = req.body;
+      
+      const queries = await storage.getUserQueries();
+      const analysis = await enhancedCorrelationEngine.performDeepAnalysis(queries);
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error('Threat intelligence analysis error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Threat intelligence analysis failed'
+      });
+    }
+  });
+
+  app.get("/api/threat-intelligence/dashboard", async (req, res) => {
+    try {
+      const queries = await storage.getUserQueries();
+      
+      // Generate comprehensive threat intelligence
+      const analysis = await enhancedCorrelationEngine.performDeepAnalysis(queries);
+      
+      // Format for dashboard consumption
+      const dashboardData = {
+        summary: {
+          totalIOCs: analysis.threatIntel.indicators.iocs.length,
+          activeCampaigns: analysis.threatIntel.indicators.campaigns.length,
+          threatGroups: analysis.threatIntel.attribution.groups.length,
+          confidenceLevel: analysis.threatIntel.attribution.confidence
+        },
+        timeline: analysis.correlations.flatMap(c => c.temporalAnalysis.timeline),
+        riskAssessment: {
+          criticalAssets: analysis.correlations.filter(c => c.impact === 'critical').length,
+          overallRisk: analysis.correlations.reduce((acc, c) => acc + c.confidence, 0) / analysis.correlations.length || 0
+        },
+        recommendations: analysis.recommendations
+      };
+      
+      res.json(dashboardData);
+    } catch (error) {
+      console.error('Dashboard data error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Dashboard data generation failed'
       });
     }
   });

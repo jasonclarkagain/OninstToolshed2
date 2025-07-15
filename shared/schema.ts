@@ -158,6 +158,11 @@ export const insertOsintReportSchema = createInsertSchema(osintReports).pick({
   format: true,
   isPublic: true,
   tags: true,
+}).extend({
+  queryIds: z.array(z.number()).default([]),
+  format: z.string().default('json'),
+  isPublic: z.boolean().default(false),
+  tags: z.array(z.string()).default([])
 });
 
 export const insertToolConfigSchema = createInsertSchema(toolConfigs).pick({

@@ -28,6 +28,7 @@ import AIAnalysis from "@/components/ai-analysis";
 import MobileDashboard from "@/components/mobile-dashboard";
 import MultiFactorAnalysis from "@/components/multi-factor-analysis";
 import CorrelationTest from "@/components/correlation-test";
+import ThreatIntelligenceDashboard from "@/components/threat-intelligence-dashboard";
 import ResultsPanel from "@/components/results-panel";
 import DisclaimerBanner from "@/components/disclaimer-banner";
 import { useQuery } from "@tanstack/react-query";
@@ -204,6 +205,7 @@ export default function Dashboard() {
                 <h2 className="text-2xl font-bold mb-6 text-white">Multi-Factor Analysis</h2>
                 <MultiFactorAnalysis />
                 <CorrelationTest />
+                <ThreatIntelligenceDashboard />
               </section>
             )}
 
