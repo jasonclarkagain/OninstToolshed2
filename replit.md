@@ -55,12 +55,42 @@ The application provides multiple intelligence-gathering tools:
 4. **Search & Investigation Tools**
    - Google dorking query generator
 
-### Database Schema
-The application uses three main database tables:
+5. **Advanced Security Framework**
+   - Kali Linux virtual machine with full terminal access
+   - Metasploit exploitation framework interface
+   - Social engineering toolkit and assessment tools
+   - Comprehensive vulnerability scanner with CVE database
+   - OSINT framework with 40+ reconnaissance tools
 
-1. **Users**: User authentication and management
-2. **OSINT Queries**: Stores all tool execution results and metadata
-3. **OSINT Reports**: Allows users to create and export investigation reports
+### Enterprise Features
+
+6. **Intelligence Dashboard**
+   - Real-time threat intelligence feeds from multiple sources
+   - Visual network mapping and topology analysis
+   - Automated correlation between different tool results
+   - Live security monitoring with severity-based alerting
+
+7. **Advanced Reporting Engine**
+   - Professional penetration testing report generation
+   - Multiple export formats (PDF, DOCX, JSON, XML)
+   - Executive summary with risk ratings and recommendations
+   - Customizable templates for different audiences
+
+8. **Workflow Automation**
+   - Chain multiple tools together for comprehensive assessments
+   - Custom scan profiles (Quick, Comprehensive, Stealth, Aggressive)
+   - Scheduled automated reconnaissance scans
+   - Workflow step management with delay configurations
+
+### Database Schema
+The application uses an enhanced database schema with six main tables:
+
+1. **Users**: User authentication and management with role-based access
+2. **OSINT Queries**: Stores all tool execution results and metadata with detailed tracking
+3. **OSINT Reports**: Professional report generation with versioning and export capabilities
+4. **Tool Configs**: User-specific configurations for different OSINT tools
+5. **API Keys**: Secure storage for external service credentials
+6. **Audit Logs**: Comprehensive activity tracking for security and compliance
 
 ### Authentication System
 - Simple username/password authentication

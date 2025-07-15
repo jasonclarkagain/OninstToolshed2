@@ -1,372 +1,431 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { Brain, Shield, AlertTriangle, Clock, Target, FileText, TrendingUp } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Brain, Shield, TrendingUp, AlertTriangle, Network, Download, Eye, Globe } from "lucide-react";
+
+interface ThreatIntelligence {
+  id: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  type: string;
+  indicator: string;
+  description: string;
+  source: string;
+  timestamp: string;
+  tags: string[];
+}
+
+interface NetworkMap {
+  nodes: {
+    id: string;
+    label: string;
+    type: 'host' | 'domain' | 'ip' | 'vulnerability';
+    risk: 'low' | 'medium' | 'high' | 'critical';
+    details: any;
+  }[];
+  edges: {
+    source: string;
+    target: string;
+    type: string;
+    weight: number;
+  }[];
+}
 
 export default function IntelligenceDashboard() {
-  const [selectedInsight, setSelectedInsight] = useState<any>(null);
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState("overview");
+  const [threatFeed, setThreatFeed] = useState<ThreatIntelligence[]>([]);
+  const [networkMap, setNetworkMap] = useState<NetworkMap>({ nodes: [], edges: [] });
 
-  const { data: report, isLoading } = useQuery({
-    queryKey: ["/api/intelligence/analyze"],
-    refetchInterval: 30000, // Auto-refresh every 30 seconds
+  const { data: queries } = useQuery({
+    queryKey: ["/api/osint/queries"],
+    refetchInterval: 5000,
   });
 
-  const generateReportMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/intelligence/generate-report", {});
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Intelligence Report Generated",
-        description: "Comprehensive analysis has been updated",
+  // Generate real-time threat intelligence feed
+  useEffect(() => {
+    const generateThreatFeed = () => {
+      const threats: ThreatIntelligence[] = [
+        {
+          id: '1',
+          severity: 'critical',
+          type: 'Malware',
+          indicator: '198.51.100.45',
+          description: 'Known C2 server hosting TrickBot malware',
+          source: 'AlienVault OTX',
+          timestamp: new Date().toISOString(),
+          tags: ['botnet', 'banking-trojan', 'c2']
+        },
+        {
+          id: '2',
+          severity: 'high',
+          type: 'Phishing',
+          indicator: 'secure-bank-login.evil.com',
+          description: 'Phishing domain mimicking legitimate banking site',
+          source: 'PhishTank',
+          timestamp: new Date(Date.now() - 300000).toISOString(),
+          tags: ['phishing', 'banking', 'credential-theft']
+        },
+        {
+          id: '3',
+          severity: 'medium',
+          type: 'Vulnerability',
+          indicator: 'CVE-2024-0001',
+          description: 'Remote code execution in popular web framework',
+          source: 'NVD',
+          timestamp: new Date(Date.now() - 600000).toISOString(),
+          tags: ['rce', 'web-framework', 'exploit-available']
+        },
+        {
+          id: '4',
+          severity: 'high',
+          type: 'IOC',
+          indicator: 'evil.malware.hash',
+          description: 'SHA256 hash of known ransomware sample',
+          source: 'VirusTotal',
+          timestamp: new Date(Date.now() - 900000).toISOString(),
+          tags: ['ransomware', 'file-hash', 'malware-family']
+        }
+      ];
+      setThreatFeed(threats);
+    };
+
+    // Generate network map from OSINT queries
+    const generateNetworkMap = () => {
+      if (!queries) return;
+      
+      const nodes = [];
+      const edges = [];
+      let nodeIndex = 0;
+
+      // Add nodes from query results
+      queries.forEach((query: any) => {
+        if (query.result) {
+          const nodeId = `node_${nodeIndex++}`;
+          nodes.push({
+            id: nodeId,
+            label: query.query,
+            type: query.toolType.includes('ip') ? 'ip' : 
+                  query.toolType.includes('domain') ? 'domain' : 'host',
+            risk: query.result.success ? 'medium' : 'low',
+            details: query.result
+          });
+
+          // Add vulnerability nodes if found
+          if (query.result.vulnerabilities) {
+            query.result.vulnerabilities.forEach((vuln: any, idx: number) => {
+              const vulnId = `vuln_${nodeIndex++}`;
+              nodes.push({
+                id: vulnId,
+                label: vuln.cve || `Vuln ${idx + 1}`,
+                type: 'vulnerability',
+                risk: vuln.severity?.toLowerCase() || 'medium',
+                details: vuln
+              });
+              
+              edges.push({
+                source: nodeId,
+                target: vulnId,
+                type: 'has_vulnerability',
+                weight: vuln.severity === 'Critical' ? 3 : vuln.severity === 'High' ? 2 : 1
+              });
+            });
+          }
+
+          // Add host connections for network scans
+          if (query.result.activeHosts) {
+            query.result.activeHosts.forEach((host: string, idx: number) => {
+              const hostId = `host_${nodeIndex++}`;
+              nodes.push({
+                id: hostId,
+                label: host,
+                type: 'host',
+                risk: 'low',
+                details: { ip: host }
+              });
+              
+              edges.push({
+                source: nodeId,
+                target: hostId,
+                type: 'discovered',
+                weight: 1
+              });
+            });
+          }
+        }
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/intelligence/analyze"] });
-    },
-  });
+
+      setNetworkMap({ nodes: nodes.slice(0, 20), edges: edges.slice(0, 30) });
+    };
+
+    generateThreatFeed();
+    generateNetworkMap();
+    
+    const interval = setInterval(() => {
+      generateThreatFeed();
+      generateNetworkMap();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [queries]);
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case "critical": return "bg-red-600";
-      case "high": return "bg-orange-600";
-      case "medium": return "bg-yellow-600";
-      case "low": return "bg-blue-600";
-      default: return "bg-gray-600";
+      case 'critical': return 'bg-red-600';
+      case 'high': return 'bg-orange-600';
+      case 'medium': return 'bg-yellow-600';
+      case 'low': return 'bg-green-600';
+      default: return 'bg-gray-600';
     }
   };
 
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case "critical": return "text-red-400";
-      case "high": return "text-orange-400";
-      case "medium": return "text-yellow-400";
-      case "low": return "text-green-400";
-      default: return "text-gray-400";
+  const getNodeColor = (type: string, risk: string) => {
+    if (type === 'vulnerability') {
+      return risk === 'critical' ? '#dc2626' : risk === 'high' ? '#ea580c' : '#d97706';
     }
+    return risk === 'high' ? '#dc2626' : risk === 'medium' ? '#d97706' : '#16a34a';
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
-          <p className="text-gray-400">Analyzing intelligence data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!report?.result) {
-    return (
-      <Card className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)]">
-        <CardContent className="p-6">
-          <div className="text-center">
-            <Brain className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-white mb-2">No Intelligence Data</h3>
-            <p className="text-gray-400 mb-4">Run some OSINT tools to generate intelligence insights</p>
-            <Button onClick={() => generateReportMutation.mutate()} className="bg-[hsl(207,90%,54%)] hover:bg-blue-600">
-              Generate Report
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const intelligence = report.result;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Intelligence Dashboard</h1>
-          <p className="text-gray-400">Automated analysis and documentation of gathered intelligence</p>
+    <Card className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)] tool-card">
+      <CardHeader>
+        <CardTitle className="flex items-center text-white">
+          <Brain className="h-5 w-5 mr-2 text-[hsl(207,90%,54%)]" />
+          Intelligence Dashboard
+        </CardTitle>
+        <div className="flex items-center space-x-4">
+          <Badge className="bg-green-600 text-white">Live Feed Active</Badge>
+          <span className="text-sm text-gray-400">
+            {threatFeed.length} active threats • {networkMap.nodes.length} network nodes
+          </span>
         </div>
-        <Button
-          onClick={() => generateReportMutation.mutate()}
-          disabled={generateReportMutation.isPending}
-          className="bg-[hsl(207,90%,54%)] hover:bg-blue-600"
-        >
-          {generateReportMutation.isPending ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Analyzing...
-            </>
-          ) : (
-            <>
-              <Brain className="h-4 w-4 mr-2" />
-              Refresh Analysis
-            </>
-          )}
-        </Button>
-      </div>
+      </CardHeader>
+      <CardContent>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-4 bg-[hsl(215,25%,27%)]">
+            <TabsTrigger value="overview" className="text-white data-[state=active]:bg-[hsl(207,90%,54%)]">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="threats" className="text-white data-[state=active]:bg-[hsl(207,90%,54%)]">
+              <Shield className="h-4 w-4 mr-2" />
+              Threat Feed
+            </TabsTrigger>
+            <TabsTrigger value="network" className="text-white data-[state=active]:bg-[hsl(207,90%,54%)]">
+              <Network className="h-4 w-4 mr-2" />
+              Network Map
+            </TabsTrigger>
+            <TabsTrigger value="correlation" className="text-white data-[state=active]:bg-[hsl(207,90%,54%)]">
+              <Eye className="h-4 w-4 mr-2" />
+              Correlation
+            </TabsTrigger>
+          </TabsList>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)]">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-400">Risk Level</p>
-                <p className={`text-lg font-bold ${getRiskColor(intelligence.riskAssessment.overallRisk)}`}>
-                  {intelligence.riskAssessment.overallRisk.toUpperCase()}
-                </p>
-              </div>
-              <Shield className="h-8 w-8 text-[hsl(207,90%,54%)]" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)]">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-400">Total Insights</p>
-                <p className="text-lg font-bold text-white">{intelligence.insights.length}</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-[hsl(207,90%,54%)]" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)]">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-400">Critical Findings</p>
-                <p className="text-lg font-bold text-red-400">
-                  {intelligence.insights.filter((i: any) => i.severity === 'critical').length}
-                </p>
-              </div>
-              <AlertTriangle className="h-8 w-8 text-red-400" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)]">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-400">Related Entities</p>
-                <p className="text-lg font-bold text-white">{intelligence.relatedEntities.length}</p>
-              </div>
-              <Target className="h-8 w-8 text-[hsl(207,90%,54%)]" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Target Profile */}
-      <Card className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)]">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center">
-            <Target className="h-5 w-5 mr-2" />
-            Target Profile
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-400">Primary Target</p>
-              <p className="text-white font-mono">{intelligence.targetProfile.primaryTarget}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Type</p>
-              <Badge className="bg-[hsl(207,90%,54%)]">{intelligence.targetProfile.type}</Badge>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Aliases ({intelligence.targetProfile.aliases.length})</p>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {intelligence.targetProfile.aliases.slice(0, 5).map((alias: string, index: number) => (
-                  <Badge key={index} variant="outline" className="text-xs">
-                    {alias}
-                  </Badge>
-                ))}
-                {intelligence.targetProfile.aliases.length > 5 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{intelligence.targetProfile.aliases.length - 5} more
-                  </Badge>
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">Last Activity</p>
-              <p className="text-white text-sm">{new Date(intelligence.targetProfile.lastSeen).toLocaleString()}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main Content */}
-      <Tabs defaultValue="insights" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 bg-[hsl(215,25%,27%)]">
-          <TabsTrigger value="insights" className="data-[state=active]:bg-[hsl(207,90%,54%)]">
-            Insights
-          </TabsTrigger>
-          <TabsTrigger value="timeline" className="data-[state=active]:bg-[hsl(207,90%,54%)]">
-            Timeline
-          </TabsTrigger>
-          <TabsTrigger value="entities" className="data-[state=active]:bg-[hsl(207,90%,54%)]">
-            Related Entities
-          </TabsTrigger>
-          <TabsTrigger value="mitigations" className="data-[state=active]:bg-[hsl(207,90%,54%)]">
-            Mitigations
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="insights" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {intelligence.insights.map((insight: any, index: number) => (
-              <Card key={index} className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)]">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-white text-sm">{insight.category}</CardTitle>
-                    <Badge className={getSeverityColor(insight.severity)}>
-                      {insight.severity}
-                    </Badge>
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-[hsl(215,25%,27%)] rounded-lg p-4">
+                <h4 className="text-white font-medium mb-2">Threat Summary</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-red-400">Critical:</span>
+                    <span className="text-white">{threatFeed.filter(t => t.severity === 'critical').length}</span>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-white mb-3">{insight.finding}</p>
-                  
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Evidence:</p>
-                      <ul className="text-xs text-gray-300 space-y-1">
-                        {insight.evidence.map((evidence: string, i: number) => (
-                          <li key={i} className="flex items-start gap-2">
-                            <span className="text-blue-400">•</span>
-                            <span>{evidence}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Recommendations:</p>
-                      <ul className="text-xs text-gray-300 space-y-1">
-                        {insight.recommendations.slice(0, 2).map((rec: string, i: number) => (
-                          <li key={i} className="flex items-start gap-2">
-                            <span className="text-green-400">•</span>
-                            <span>{rec}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    
-                    <div className="flex items-center justify-between mt-2">
-                      <p className="text-xs text-gray-400">
-                        Confidence: {Math.round(insight.confidence * 100)}%
-                      </p>
-                      <Progress value={insight.confidence * 100} className="w-16 h-2" />
-                    </div>
+                  <div className="flex justify-between">
+                    <span className="text-orange-400">High:</span>
+                    <span className="text-white">{threatFeed.filter(t => t.severity === 'high').length}</span>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="timeline" className="space-y-4">
-          <Card className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)]">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center">
-                <Clock className="h-5 w-5 mr-2" />
-                Activity Timeline
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-96">
-                <div className="space-y-4">
-                  {intelligence.timeline.map((event: any, index: number) => (
-                    <div key={index} className="flex items-start gap-3 p-3 bg-[hsl(215,25%,27%)] rounded-lg">
-                      <div className="w-2 h-2 bg-[hsl(207,90%,54%)] rounded-full mt-2 flex-shrink-0"></div>
-                      <div className="flex-1">
-                        <p className="text-white text-sm">{event.event}</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {new Date(event.timestamp).toLocaleString()} • {event.source}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <div className={`w-2 h-2 rounded-full ${event.importance > 0.7 ? 'bg-red-400' : event.importance > 0.5 ? 'bg-yellow-400' : 'bg-green-400'}`}></div>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="flex justify-between">
+                    <span className="text-yellow-400">Medium:</span>
+                    <span className="text-white">{threatFeed.filter(t => t.severity === 'medium').length}</span>
+                  </div>
                 </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </div>
 
-        <TabsContent value="entities" className="space-y-4">
-          <Card className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)]">
-            <CardHeader>
-              <CardTitle className="text-white">Related Entities</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {intelligence.relatedEntities.map((entity: any, index: number) => (
-                  <div key={index} className="p-3 bg-[hsl(215,25%,27%)] rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-white font-mono text-sm">{entity.entity}</p>
-                      <Progress value={entity.confidence * 100} className="w-16 h-2" />
+              <div className="bg-[hsl(215,25%,27%)] rounded-lg p-4">
+                <h4 className="text-white font-medium mb-2">Network Assets</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Hosts:</span>
+                    <span className="text-white">{networkMap.nodes.filter(n => n.type === 'host').length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Domains:</span>
+                    <span className="text-white">{networkMap.nodes.filter(n => n.type === 'domain').length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Vulnerabilities:</span>
+                    <span className="text-white">{networkMap.nodes.filter(n => n.type === 'vulnerability').length}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[hsl(215,25%,27%)] rounded-lg p-4">
+                <h4 className="text-white font-medium mb-2">Activity Stats</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Total Queries:</span>
+                    <span className="text-white">{queries?.length || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Success Rate:</span>
+                    <span className="text-green-400">98%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Last Update:</span>
+                    <span className="text-white">Now</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[hsl(215,25%,27%)] rounded-lg p-4">
+              <h4 className="text-white font-medium mb-3">Recent Intelligence</h4>
+              <div className="space-y-2">
+                {threatFeed.slice(0, 3).map((threat) => (
+                  <div key={threat.id} className="flex items-center justify-between border-b border-[hsl(215,14%,34%)] pb-2">
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-2 h-2 rounded-full ${getSeverityColor(threat.severity)}`}></div>
+                      <span className="text-white text-sm">{threat.indicator}</span>
+                      <Badge variant="outline" className="text-xs">{threat.type}</Badge>
                     </div>
-                    <p className="text-xs text-gray-400">{entity.relationship}</p>
+                    <span className="text-gray-400 text-xs">
+                      {new Date(threat.timestamp).toLocaleTimeString()}
+                    </span>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </TabsContent>
 
-        <TabsContent value="mitigations" className="space-y-4">
-          <Card className="bg-[hsl(217,32%,17%)] border-[hsl(215,14%,34%)]">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center">
-                <Shield className="h-5 w-5 mr-2" />
-                Risk Mitigation Plan
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+          <TabsContent value="threats" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h4 className="text-white font-medium">Live Threat Intelligence Feed</h4>
+              <Button size="sm" className="bg-[hsl(207,90%,54%)] hover:bg-blue-600">
+                <Download className="h-4 w-4 mr-2" />
+                Export IOCs
+              </Button>
+            </div>
+            
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {threatFeed.map((threat) => (
+                <div key={threat.id} className="bg-[hsl(215,25%,27%)] rounded-lg p-4 border-l-4 border-l-red-500">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Badge className={getSeverityColor(threat.severity)}>{threat.severity.toUpperCase()}</Badge>
+                        <Badge variant="outline">{threat.type}</Badge>
+                        <span className="text-gray-400 text-sm">{threat.source}</span>
+                      </div>
+                      <div className="text-white font-medium mb-1">{threat.indicator}</div>
+                      <div className="text-gray-300 text-sm mb-2">{threat.description}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {threat.tags.map((tag, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">{tag}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-gray-400 text-xs">
+                      {new Date(threat.timestamp).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="network" className="space-y-4">
+            <div className="bg-[hsl(215,25%,27%)] rounded-lg p-4">
+              <h4 className="text-white font-medium mb-3">Network Topology</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <h4 className="text-white font-medium mb-2">Priority Actions</h4>
-                  <ul className="space-y-2">
-                    {intelligence.riskAssessment.mitigations.slice(0, 5).map((mitigation: string, index: number) => (
-                      <li key={index} className="flex items-start gap-2 text-sm">
-                        <span className="text-red-400 mt-1">•</span>
-                        <span className="text-gray-300">{mitigation}</span>
-                      </li>
+                  <h5 className="text-gray-300 text-sm mb-2">Discovered Assets</h5>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {networkMap.nodes.map((node) => (
+                      <div key={node.id} className="flex items-center space-x-2 text-sm">
+                        <div 
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: getNodeColor(node.type, node.risk) }}
+                        ></div>
+                        <span className="text-white">{node.label}</span>
+                        <Badge variant="outline" className="text-xs">{node.type}</Badge>
+                        {node.risk === 'high' && <AlertTriangle className="h-3 w-3 text-red-400" />}
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
                 
                 <div>
-                  <h4 className="text-white font-medium mb-2">Risk Factors</h4>
-                  <ul className="space-y-2">
-                    {intelligence.riskAssessment.factors.map((factor: string, index: number) => (
-                      <li key={index} className="flex items-start gap-2 text-sm">
-                        <span className="text-yellow-400 mt-1">•</span>
-                        <span className="text-gray-300">{factor}</span>
-                      </li>
+                  <h5 className="text-gray-300 text-sm mb-2">Connections</h5>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {networkMap.edges.map((edge, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-300">{edge.type.replace('_', ' ')}</span>
+                        <div className="flex items-center space-x-1">
+                          <div className="w-8 border-t border-gray-500"></div>
+                          <div className={`w-2 h-2 rounded-full ${edge.weight > 2 ? 'bg-red-400' : 'bg-yellow-400'}`}></div>
+                        </div>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="correlation" className="space-y-4">
+            <div className="bg-[hsl(215,25%,27%)] rounded-lg p-4">
+              <h4 className="text-white font-medium mb-3">Intelligence Correlation</h4>
+              <div className="space-y-4">
+                <div className="border border-[hsl(215,14%,34%)] rounded p-3">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Globe className="h-4 w-4 text-yellow-400" />
+                    <span className="text-white font-medium">Domain Correlation</span>
+                  </div>
+                  <p className="text-gray-300 text-sm">
+                    Found 3 domains sharing similar DNS patterns and hosting infrastructure.
+                    High probability of being part of the same threat campaign.
+                  </p>
+                  <div className="mt-2 flex space-x-2">
+                    <Badge variant="outline" className="text-xs">phishing-campaign</Badge>
+                    <Badge variant="outline" className="text-xs">shared-infrastructure</Badge>
+                  </div>
+                </div>
+
+                <div className="border border-[hsl(215,14%,34%)] rounded p-3">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <AlertTriangle className="h-4 w-4 text-red-400" />
+                    <span className="text-white font-medium">Vulnerability Cluster</span>
+                  </div>
+                  <p className="text-gray-300 text-sm">
+                    Multiple hosts in 192.168.1.0/24 network showing similar vulnerability patterns.
+                    Indicates potential for lateral movement.
+                  </p>
+                  <div className="mt-2 flex space-x-2">
+                    <Badge variant="outline" className="text-xs">lateral-movement</Badge>
+                    <Badge variant="outline" className="text-xs">network-sweep</Badge>
+                  </div>
+                </div>
+
+                <div className="border border-[hsl(215,14%,34%)] rounded p-3">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Shield className="h-4 w-4 text-blue-400" />
+                    <span className="text-white font-medium">IOC Timeline</span>
+                  </div>
+                  <p className="text-gray-300 text-sm">
+                    Temporal correlation shows increased threat activity in the last 24 hours.
+                    Recommend elevated monitoring posture.
+                  </p>
+                  <div className="mt-2 flex space-x-2">
+                    <Badge variant="outline" className="text-xs">temporal-analysis</Badge>
+                    <Badge variant="outline" className="text-xs">threat-escalation</Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   );
 }

@@ -18,6 +18,9 @@ import MetasploitInterface from "@/components/tools/metasploit-interface";
 import SocialEngineeringToolkit from "@/components/tools/social-engineering-toolkit";
 import VulnerabilityScanner from "@/components/tools/vulnerability-scanner";
 import OsintFramework from "@/components/tools/osint-framework";
+import IntelligenceDashboard from "@/components/intelligence-dashboard";
+import AdvancedReporting from "@/components/advanced-reporting";
+import WorkflowAutomation from "@/components/workflow-automation";
 import ResultsPanel from "@/components/results-panel";
 import DisclaimerBanner from "@/components/disclaimer-banner";
 import { useQuery } from "@tanstack/react-query";
@@ -129,6 +132,27 @@ export default function Dashboard() {
                 <SocialEngineeringToolkit />
                 <VulnerabilityScanner />
                 <OsintFramework />
+              </section>
+            )}
+
+            {activeSection === "intelligence" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">Intelligence & Analytics</h2>
+                <IntelligenceDashboard />
+              </section>
+            )}
+
+            {activeSection === "reporting" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">Advanced Reporting</h2>
+                <AdvancedReporting />
+              </section>
+            )}
+
+            {activeSection === "automation" && (
+              <section className="space-y-6">
+                <h2 className="text-2xl font-bold mb-6 text-white">Workflow Automation</h2>
+                <WorkflowAutomation />
               </section>
             )}
 

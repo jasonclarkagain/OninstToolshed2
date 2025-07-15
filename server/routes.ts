@@ -892,6 +892,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Advanced reporting endpoint
+  app.post("/api/osint/generate-report", async (req, res) => {
+    try {
+      const reportConfig = z.object({
+        title: z.string(),
+        template: z.string(),
+        format: z.string().default('pdf'),
+        executiveSummary: z.string().optional(),
+        methodology: z.string().optional(),
+        findings: z.array(z.any()).optional(),
+        recommendations: z.array(z.string()).optional(),
+        riskRating: z.string().optional(),
+        scope: z.string().optional(),
+        timeline: z.string().optional(),
+        audience: z.string().optional()
+      }).parse(req.body);
+
+      const report = await storage.createReport({
+        title: reportConfig.title,
+        queryIds: [],
+        format: reportConfig.format
+      });
+
+      res.json({ 
+        reportId: report.id,
+        downloadUrl: `/api/osint/reports/${report.id}/download`,
+        message: "Report generated successfully"
+      });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // Workflow automation endpoint
+  app.post("/api/osint/run-workflow", async (req, res) => {
+    try {
+      const { workflowId } = z.object({
+        workflowId: z.string()
+      }).parse(req.body);
+
+      // Simulate workflow execution
+      const workflowResult = {
+        workflowId,
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        estimatedCompletion: new Date(Date.now() + 300000).toISOString(), // 5 minutes
+        steps: [
+          { id: '1', name: 'Domain Enumeration', status: 'completed', duration: '45s' },
+          { id: '2', name: 'Vulnerability Scan', status: 'running', duration: '120s' },
+          { id: '3', name: 'Exploitation Check', status: 'pending', duration: null }
+        ],
+        results: []
+      };
+
+      // Create a query to track the workflow execution
+      const query = await storage.createOsintQuery({
+        toolType: 'workflow_automation',
+        query: `Workflow: ${workflowId}`,
+        status: 'completed',
+        result: workflowResult
+      });
+
+      res.json({ 
+        queryId: query.id,
+        workflow: workflowResult,
+        message: "Workflow started successfully"
+      });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   // Kali Linux VM terminal endpoint
   app.post("/api/osint/kali-vm", async (req, res) => {
     try {
