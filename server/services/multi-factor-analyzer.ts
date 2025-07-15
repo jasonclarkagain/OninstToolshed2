@@ -590,8 +590,50 @@ export class MultiFactorAnalyzer {
   }
 
   private detectDomainPatterns(queries: OsintQuery[]): PatternAnalysis[] {
-    // Implement domain pattern detection
-    return [];
+    const patterns: PatternAnalysis[] = [];
+    const domainQueries = queries.filter(q => q.toolType === 'domain_enumeration' || q.toolType === 'subdomain_enumeration');
+    
+    if (domainQueries.length < 2) return patterns;
+    
+    // Pattern: Consistent subdomain exposure
+    const subdomainPattern = this.analyzeSubdomainPatterns(domainQueries);
+    if (subdomainPattern.significance > 0.5) {
+      patterns.push({
+        id: 'subdomain-exposure',
+        pattern: 'Development environments consistently exposed',
+        frequency: subdomainPattern.frequency,
+        queries: subdomainPattern.queryIds,
+        significance: subdomainPattern.significance,
+        category: 'domain',
+        description: 'Multiple domains show exposed development and staging subdomains',
+        recommendations: [
+          'Implement access controls for non-production environments',
+          'Use internal DNS for development resources',
+          'Apply authentication to staging environments'
+        ]
+      });
+    }
+    
+    // Pattern: SSL certificate clustering
+    const sslPattern = this.analyzeSSLPatterns(domainQueries);
+    if (sslPattern.significance > 0.5) {
+      patterns.push({
+        id: 'ssl-clustering',
+        pattern: 'SSL certificate expiration clustering',
+        frequency: sslPattern.frequency,
+        queries: sslPattern.queryIds,
+        significance: sslPattern.significance,
+        category: 'domain',
+        description: 'Multiple SSL certificates expiring within similar timeframes',
+        recommendations: [
+          'Implement automated certificate renewal',
+          'Stagger certificate expiration dates',
+          'Set up certificate monitoring alerts'
+        ]
+      });
+    }
+    
+    return patterns;
   }
 
   private detectIPPatterns(queries: OsintQuery[]): PatternAnalysis[] {
@@ -605,8 +647,54 @@ export class MultiFactorAnalyzer {
   }
 
   private detectServicePatterns(queries: OsintQuery[]): PatternAnalysis[] {
-    // Implement service pattern detection
-    return [];
+    const patterns: PatternAnalysis[] = [];
+    const serviceQueries = queries.filter(q => 
+      q.toolType === 'port_scan' || 
+      q.toolType === 'service_enumeration' ||
+      q.toolType === 'network_scan'
+    );
+    
+    if (serviceQueries.length < 2) return patterns;
+    
+    // Pattern: Common port exposure
+    const portPattern = this.analyzeCommonPorts(serviceQueries);
+    if (portPattern.significance > 0.6) {
+      patterns.push({
+        id: 'common-ports',
+        pattern: 'Consistent management port exposure',
+        frequency: portPattern.frequency,
+        queries: portPattern.queryIds,
+        significance: portPattern.significance,
+        category: 'service',
+        description: 'Management interfaces commonly exposed across infrastructure',
+        recommendations: [
+          'Restrict management interface access',
+          'Implement VPN access for administrative services',
+          'Change default ports for security services'
+        ]
+      });
+    }
+    
+    // Pattern: Service version clustering
+    const versionPattern = this.analyzeServiceVersions(serviceQueries);
+    if (versionPattern.significance > 0.7) {
+      patterns.push({
+        id: 'service-versions',
+        pattern: 'Outdated service version clustering',
+        frequency: versionPattern.frequency,
+        queries: versionPattern.queryIds,
+        significance: versionPattern.significance,
+        category: 'service',
+        description: 'Multiple services running outdated versions with known vulnerabilities',
+        recommendations: [
+          'Implement automated patch management',
+          'Regular service inventory and updates',
+          'Version tracking and monitoring'
+        ]
+      });
+    }
+    
+    return patterns;
   }
 
   private detectBehaviorPatterns(queries: OsintQuery[]): PatternAnalysis[] {
@@ -657,6 +745,125 @@ export class MultiFactorAnalyzer {
 
   private getOperationalContributors(correlations: CorrelationResult[], patterns: PatternAnalysis[]): string[] {
     return ['Predictable maintenance windows', 'Inconsistent security policies', 'Centralized management risks'];
+  }
+
+  // Helper methods for pattern analysis
+  private analyzeSubdomainPatterns(queries: OsintQuery[]): { frequency: number; queryIds: number[]; significance: number } {
+    const devSubdomains = ['dev', 'staging', 'test', 'beta', 'qa', 'development'];
+    let frequency = 0;
+    const queryIds: number[] = [];
+    
+    for (const query of queries) {
+      const result = query.result as any;
+      if (result?.subdomains) {
+        const hasDevSubdomains = result.subdomains.some((sub: string) => 
+          devSubdomains.some(dev => sub.toLowerCase().includes(dev))
+        );
+        if (hasDevSubdomains) {
+          frequency++;
+          queryIds.push(query.id);
+        }
+      }
+    }
+    
+    return {
+      frequency,
+      queryIds,
+      significance: frequency / queries.length
+    };
+  }
+
+  private analyzeSSLPatterns(queries: OsintQuery[]): { frequency: number; queryIds: number[]; significance: number } {
+    const expirationDates: { queryId: number; expiry: Date }[] = [];
+    
+    for (const query of queries) {
+      const result = query.result as any;
+      if (result?.ssl?.expiry) {
+        expirationDates.push({
+          queryId: query.id,
+          expiry: new Date(result.ssl.expiry)
+        });
+      }
+    }
+    
+    // Check for clustering within 30 days
+    let clusterCount = 0;
+    const clusteredQueries: number[] = [];
+    
+    for (let i = 0; i < expirationDates.length; i++) {
+      for (let j = i + 1; j < expirationDates.length; j++) {
+        const daysDiff = Math.abs(
+          (expirationDates[i].expiry.getTime() - expirationDates[j].expiry.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        if (daysDiff <= 30) {
+          clusterCount++;
+          if (!clusteredQueries.includes(expirationDates[i].queryId)) {
+            clusteredQueries.push(expirationDates[i].queryId);
+          }
+          if (!clusteredQueries.includes(expirationDates[j].queryId)) {
+            clusteredQueries.push(expirationDates[j].queryId);
+          }
+        }
+      }
+    }
+    
+    return {
+      frequency: clusterCount,
+      queryIds: clusteredQueries,
+      significance: clusteredQueries.length / queries.length
+    };
+  }
+
+  private analyzeCommonPorts(queries: OsintQuery[]): { frequency: number; queryIds: number[]; significance: number } {
+    const managementPorts = [8080, 8443, 9090, 3389, 5432, 3306, 27017, 6379];
+    let frequency = 0;
+    const queryIds: number[] = [];
+    
+    for (const query of queries) {
+      const result = query.result as any;
+      if (result?.ports) {
+        const hasManagementPorts = result.ports.some((port: number) => 
+          managementPorts.includes(port)
+        );
+        if (hasManagementPorts) {
+          frequency++;
+          queryIds.push(query.id);
+        }
+      }
+    }
+    
+    return {
+      frequency,
+      queryIds,
+      significance: frequency / queries.length
+    };
+  }
+
+  private analyzeServiceVersions(queries: OsintQuery[]): { frequency: number; queryIds: number[]; significance: number } {
+    const outdatedVersions = ['apache/2.2', 'nginx/1.0', 'php/5', 'mysql/5.0', 'openssh/6'];
+    let frequency = 0;
+    const queryIds: number[] = [];
+    
+    for (const query of queries) {
+      const result = query.result as any;
+      if (result?.services) {
+        const hasOutdatedServices = result.services.some((service: any) => 
+          outdatedVersions.some(outdated => 
+            service.version?.toLowerCase().includes(outdated)
+          )
+        );
+        if (hasOutdatedServices) {
+          frequency++;
+          queryIds.push(query.id);
+        }
+      }
+    }
+    
+    return {
+      frequency,
+      queryIds,
+      significance: frequency / queries.length
+    };
   }
 }
 

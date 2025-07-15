@@ -112,6 +112,13 @@ The application provides multiple intelligence-gathering tools:
     - Real-time alert notifications and system status
     - Streamlined mobile workflow management
 
+14. **Multi-Factor Analysis & Correlation Tools**
+    - Advanced pattern recognition across multiple data sources
+    - Cross-tool correlation analysis with confidence scoring
+    - Multi-dimensional security risk assessment
+    - Real-time correlation detection and threat analysis
+    - Comprehensive test suite for validation
+
 ### Database Schema
 The application uses an enhanced database schema with six main tables:
 

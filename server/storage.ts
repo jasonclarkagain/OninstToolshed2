@@ -90,11 +90,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createReport(insertReport: InsertOsintReport): Promise<OsintReport> {
-    const [report] = await db
-      .insert(osintReports)
-      .values(insertReport)
-      .returning();
-    return report;
+    try {
+      const [report] = await db
+        .insert(osintReports)
+        .values(insertReport)
+        .returning();
+      return report;
+    } catch (error) {
+      console.error('Error creating report:', error);
+      throw error;
+    }
   }
 
   async getUserReports(userId?: number): Promise<OsintReport[]> {

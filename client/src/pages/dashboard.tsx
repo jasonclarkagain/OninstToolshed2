@@ -27,6 +27,7 @@ import AdvancedSearch from "@/components/advanced-search";
 import AIAnalysis from "@/components/ai-analysis";
 import MobileDashboard from "@/components/mobile-dashboard";
 import MultiFactorAnalysis from "@/components/multi-factor-analysis";
+import CorrelationTest from "@/components/correlation-test";
 import ResultsPanel from "@/components/results-panel";
 import DisclaimerBanner from "@/components/disclaimer-banner";
 import { useQuery } from "@tanstack/react-query";
@@ -202,6 +203,7 @@ export default function Dashboard() {
               <section className="space-y-6">
                 <h2 className="text-2xl font-bold mb-6 text-white">Multi-Factor Analysis</h2>
                 <MultiFactorAnalysis />
+                <CorrelationTest />
               </section>
             )}
 
