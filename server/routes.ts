@@ -3,6 +3,8 @@ import { createServer, type Server } from "http";
 import { z } from "zod";
 import { storage } from "./storage";
 import { osintService } from "./services/osint";
+import { governmentDataService } from "./services/government-data-service";
+import { proxyService } from "./services/proxy-service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Domain enumeration endpoint
@@ -263,6 +265,184 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json({ queryId: query.id, result });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // Advanced reconnaissance endpoint
+  app.post("/api/osint/advanced-recon", async (req, res) => {
+    try {
+      const { target, scanProfile, selectedModules, customOptions } = z.object({
+        target: z.string().min(1),
+        scanProfile: z.string(),
+        selectedModules: z.array(z.string()),
+        customOptions: z.string().optional().default("")
+      }).parse(req.body);
+
+      const query = await storage.createOsintQuery({
+        toolType: 'advanced_recon',
+        query: target,
+        status: 'pending'
+      });
+
+      const result = await osintService.performAdvancedRecon(target, scanProfile, selectedModules, customOptions);
+      
+      await storage.updateOsintQuery(query.id, {
+        result: result,
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      res.json({ queryId: query.id, result });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // People search endpoint
+  app.post("/api/osint/people-search", async (req, res) => {
+    try {
+      const { firstName, lastName, location, age, email, phone, selectedEngines, includeLexisNexis } = z.object({
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+        location: z.string().optional(),
+        age: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        selectedEngines: z.array(z.string()),
+        includeLexisNexis: z.boolean().default(false)
+      }).parse(req.body);
+
+      const query = await storage.createOsintQuery({
+        toolType: 'people_search',
+        query: `${firstName} ${lastName}`.trim(),
+        status: 'pending'
+      });
+
+      // Simulate people search results
+      const result = {
+        totalResults: Math.floor(Math.random() * 20) + 5,
+        sourcesUsed: selectedEngines.length,
+        lexisNexisResults: includeLexisNexis,
+        confidence: Math.floor(Math.random() * 30) + 70,
+        primaryResults: Array.from({ length: Math.floor(Math.random() * 5) + 1 }, (_, i) => ({
+          fullName: `${firstName || 'John'} ${lastName || 'Doe'}`,
+          age: Math.floor(Math.random() * 40) + 25,
+          confidence: Math.floor(Math.random() * 30) + 70,
+          addresses: [{
+            street: `${Math.floor(Math.random() * 9999) + 1} Main St`,
+            city: 'Springfield',
+            state: 'NY',
+            zip: '12345',
+            current: true
+          }],
+          phones: [{
+            number: '(555) 123-4567',
+            type: 'Mobile',
+            current: true
+          }],
+          emails: [email || 'john.doe@email.com'],
+          relatives: [{
+            name: 'Jane Doe',
+            relationship: 'Spouse'
+          }],
+          sources: selectedEngines.slice(0, 3)
+        }))
+      };
+      
+      await storage.updateOsintQuery(query.id, {
+        result: result,
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      res.json({ queryId: query.id, result });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // Geospatial intelligence endpoint
+  app.post("/api/osint/geospatial-intelligence", async (req, res) => {
+    try {
+      const { address, coordinates, searchRadius, useProxy, proxyRegion, selectedSources } = z.object({
+        address: z.string().optional(),
+        coordinates: z.object({
+          lat: z.string(),
+          lng: z.string()
+        }).nullable().optional(),
+        searchRadius: z.number(),
+        useProxy: z.boolean(),
+        proxyRegion: z.string(),
+        selectedSources: z.array(z.string())
+      }).parse(req.body);
+
+      const query = await storage.createOsintQuery({
+        toolType: 'geospatial_intelligence',
+        query: address || `${coordinates?.lat},${coordinates?.lng}`,
+        status: 'pending'
+      });
+
+      // Gather data from selected sources
+      const result: any = {
+        totalRecords: 0,
+        sourcesUsed: selectedSources.length,
+        searchRadius,
+        proxyUsed: useProxy
+      };
+
+      if (selectedSources.includes('census')) {
+        result.censusData = await governmentDataService.getCensusData(address || '', searchRadius, proxyRegion);
+        result.totalRecords += 1;
+      }
+
+      if (selectedSources.includes('voter-rolls')) {
+        result.voterData = await governmentDataService.getVoterRecords(address || '', searchRadius, proxyRegion);
+        result.totalRecords += result.voterData.length;
+      }
+
+      if (selectedSources.includes('sex-offender-registry')) {
+        result.sexOffenderData = await governmentDataService.getSexOffenderRecords(address || '', searchRadius, proxyRegion);
+        result.totalRecords += result.sexOffenderData.length;
+      }
+
+      if (selectedSources.includes('prison-search')) {
+        result.prisonData = await governmentDataService.getPrisonRecords('Sample Name', proxyRegion);
+        result.totalRecords += result.prisonData.length;
+      }
+
+      if (selectedSources.includes('ancestry')) {
+        result.genealogyData = await governmentDataService.getGenealogicalRecords('Sample Name', proxyRegion);
+        result.totalRecords += result.genealogyData.length;
+      }
+
+      if (selectedSources.includes('missing-persons')) {
+        result.missingPersonsData = await governmentDataService.getMissingPersonRecords('Sample Name', proxyRegion);
+        result.totalRecords += result.missingPersonsData.length;
+      }
+
+      if (selectedSources.includes('no-fly-list')) {
+        result.noFlyListData = await governmentDataService.checkNoFlyListIndicators('Sample Name', proxyRegion);
+      }
+
+      // Add map data
+      result.mapData = {
+        markers: Array.from({ length: Math.floor(Math.random() * 10) + 3 }, (_, i) => ({
+          lat: 40.7128 + (Math.random() - 0.5) * 0.1,
+          lng: -74.0060 + (Math.random() - 0.5) * 0.1,
+          type: ['census', 'voter', 'property'][i % 3],
+          title: `Location ${i + 1}`
+        }))
+      };
+      
+      await storage.updateOsintQuery(query.id, {
+        result: result,
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      res.json({ queryId: query.id, result, mapData: result.mapData });
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
     }

@@ -92,13 +92,7 @@ export class DatabaseStorage implements IStorage {
   async createReport(insertReport: InsertOsintReport): Promise<OsintReport> {
     const [report] = await db
       .insert(osintReports)
-      .values({
-        ...insertReport,
-        version: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        exportedAt: new Date()
-      })
+      .values(insertReport)
       .returning();
     return report;
   }
