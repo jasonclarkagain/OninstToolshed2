@@ -607,6 +607,291 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Metasploit framework interface endpoint
+  app.post("/api/osint/metasploit", async (req, res) => {
+    try {
+      const { target, exploitModule, payload, options, sessionId } = z.object({
+        target: z.string().min(1),
+        exploitModule: z.string().optional(),
+        payload: z.string().optional(),
+        options: z.string().optional(),
+        sessionId: z.string().optional()
+      }).parse(req.body);
+
+      const query = await storage.createOsintQuery({
+        toolType: 'metasploit',
+        query: target,
+        status: 'pending'
+      });
+
+      // Simulate Metasploit exploitation results
+      const result = {
+        target,
+        exploitModule: exploitModule || 'windows/smb/ms17_010_eternalblue',
+        payload: payload || 'windows/meterpreter/reverse_tcp',
+        success: Math.random() > 0.6, // 40% success rate
+        sessionId: Math.random() > 0.6 ? `session_${Math.floor(Math.random() * 100)}` : null,
+        shellType: 'meterpreter',
+        accessLevel: 'SYSTEM',
+        vulnerabilities: [
+          {
+            cve: 'CVE-2017-0144',
+            severity: 'Critical',
+            description: 'Microsoft Windows SMB Remote Code Execution Vulnerability',
+            cvssScore: 9.3,
+            exploitable: true
+          },
+          {
+            cve: 'CVE-2019-0708',
+            severity: 'Critical', 
+            description: 'Remote Desktop Services Remote Code Execution Vulnerability',
+            cvssScore: 9.8,
+            exploitable: Math.random() > 0.5
+          }
+        ],
+        output: `[*] Started reverse TCP handler on 192.168.1.50:4444\n[*] ${target}:445 - Connecting to target for exploitation.\n[*] ${target}:445 - Connection established for exploitation.\n[*] ${target}:445 - Target OS selected valid for OS indicated arch\n[*] ${target}:445 - CORE raw buffer dump (38 bytes)\n[*] ${target}:445 - Sending exploit...\n[*] Sending stage (176195 bytes) to ${target}\n[*] Meterpreter session ${Math.floor(Math.random() * 10) + 1} opened`,
+        timestamp: new Date().toISOString()
+      };
+      
+      await storage.updateOsintQuery(query.id, {
+        result: result,
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      res.json({ queryId: query.id, result });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // Social Engineering Toolkit endpoint
+  app.post("/api/osint/social-engineering", async (req, res) => {
+    try {
+      const { target, attackType, template, payload, customMessage } = z.object({
+        target: z.string().min(1),
+        attackType: z.string().optional(),
+        template: z.string().optional(),
+        payload: z.string().optional(),
+        customMessage: z.string().optional()
+      }).parse(req.body);
+
+      const query = await storage.createOsintQuery({
+        toolType: 'social_engineering',
+        query: target,
+        status: 'pending'
+      });
+
+      // Simulate Social Engineering analysis
+      const result = {
+        target,
+        attackType: attackType || 'credential_harvesting',
+        template: template || 'urgent_security',
+        payload: payload || 'credential_capture',
+        riskLevel: ['low', 'medium', 'high', 'critical'][Math.floor(Math.random() * 4)],
+        successProbability: Math.floor(Math.random() * 40) + 60,
+        detectionRisk: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)],
+        targetAwareness: ['Unaware', 'Basic', 'Advanced'][Math.floor(Math.random() * 3)],
+        vulnerabilities: [
+          {
+            type: 'Human Factor Vulnerability',
+            severity: 'High',
+            description: 'Employees susceptible to urgent security notifications',
+            exploitability: 'High',
+            mitigation: 'Security awareness training'
+          },
+          {
+            type: 'Technical Vulnerability',
+            severity: 'Medium',
+            description: 'Lack of email authentication mechanisms',
+            exploitability: 'Medium',
+            mitigation: 'Implement DMARC/SPF/DKIM'
+          }
+        ],
+        recommendations: [
+          'Implement comprehensive security awareness training',
+          'Deploy advanced email security solutions',
+          'Conduct regular phishing simulation exercises',
+          'Establish incident response procedures',
+          'Enable multi-factor authentication organization-wide'
+        ],
+        estimatedImpact: {
+          credentialsCompromised: Math.floor(Math.random() * 50) + 10,
+          systemsAtRisk: Math.floor(Math.random() * 20) + 5,
+          dataExposureRisk: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)]
+        }
+      };
+      
+      await storage.updateOsintQuery(query.id, {
+        result: result,
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      res.json({ queryId: query.id, result });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // OSINT Framework integration endpoint
+  app.post("/api/osint/osint-framework", async (req, res) => {
+    try {
+      const { target, category } = z.object({
+        target: z.string().min(1),
+        category: z.string().default('people')
+      }).parse(req.body);
+
+      const query = await storage.createOsintQuery({
+        toolType: 'osint_framework',
+        query: target,
+        status: 'pending'
+      });
+
+      // Simulate OSINT Framework results
+      const result = {
+        target,
+        category,
+        sources: [
+          {
+            name: 'TruePeopleSearch',
+            url: `https://www.truepeoplesearch.com/results?name=${encodeURIComponent(target)}`,
+            type: 'People Search',
+            reliability: 'High',
+            cost: 'Free'
+          },
+          {
+            name: 'Pipl',
+            url: `https://pipl.com/search/?q=${encodeURIComponent(target)}`,
+            type: 'Deep Web Search',
+            reliability: 'Very High',
+            cost: 'Paid'
+          },
+          {
+            name: 'BeenVerified',
+            url: `https://www.beenverified.com/search/people/${encodeURIComponent(target)}`,
+            type: 'Background Check',
+            reliability: 'High',
+            cost: 'Paid'
+          },
+          {
+            name: 'Whitepages',
+            url: `https://www.whitepages.com/name/${encodeURIComponent(target)}`,
+            type: 'Public Records',
+            reliability: 'Medium',
+            cost: 'Freemium'
+          }
+        ],
+        techniques: [
+          'Google Dorking',
+          'Social Media Mining', 
+          'Public Records Search',
+          'Dark Web Investigation',
+          'Breach Database Analysis'
+        ],
+        estimatedResults: Math.floor(Math.random() * 100) + 20,
+        searchTime: `${Math.floor(Math.random() * 30) + 5} minutes`,
+        privacyRisk: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)]
+      };
+      
+      await storage.updateOsintQuery(query.id, {
+        result: result,
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      res.json({ queryId: query.id, result });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // Vulnerability database scanner endpoint
+  app.post("/api/osint/vulnerability-scan", async (req, res) => {
+    try {
+      const { target, scanType } = z.object({
+        target: z.string().min(1),
+        scanType: z.string().default('cve')
+      }).parse(req.body);
+
+      const query = await storage.createOsintQuery({
+        toolType: 'vulnerability_scan',
+        query: target,
+        status: 'pending'
+      });
+
+      // Simulate vulnerability scan results
+      const vulnerabilities = [
+        {
+          cve: 'CVE-2024-0001',
+          severity: 'Critical',
+          cvssScore: 9.8,
+          description: 'Remote Code Execution vulnerability in web application',
+          affected: target,
+          exploitAvailable: true,
+          patchAvailable: true,
+          publishedDate: '2024-01-15',
+          lastModified: '2024-01-20'
+        },
+        {
+          cve: 'CVE-2023-4567',
+          severity: 'High',
+          cvssScore: 8.1,
+          description: 'SQL Injection vulnerability in database interface',
+          affected: target,
+          exploitAvailable: false,
+          patchAvailable: true,
+          publishedDate: '2023-12-10',
+          lastModified: '2023-12-15'
+        },
+        {
+          cve: 'CVE-2023-8901',
+          severity: 'Medium',
+          cvssScore: 6.5,
+          description: 'Cross-Site Scripting (XSS) vulnerability',
+          affected: target,
+          exploitAvailable: true,
+          patchAvailable: false,
+          publishedDate: '2023-11-25',
+          lastModified: '2023-11-30'
+        }
+      ];
+
+      const result = {
+        target,
+        scanType,
+        vulnerabilities: vulnerabilities.slice(0, Math.floor(Math.random() * 3) + 1),
+        totalVulnerabilities: vulnerabilities.length,
+        criticalCount: vulnerabilities.filter(v => v.severity === 'Critical').length,
+        highCount: vulnerabilities.filter(v => v.severity === 'High').length,
+        mediumCount: vulnerabilities.filter(v => v.severity === 'Medium').length,
+        lowCount: vulnerabilities.filter(v => v.severity === 'Low').length,
+        exploitableCount: vulnerabilities.filter(v => v.exploitAvailable).length,
+        patchableCount: vulnerabilities.filter(v => v.patchAvailable).length,
+        riskScore: Math.floor(Math.random() * 40) + 60,
+        recommendations: [
+          'Apply security patches immediately for critical vulnerabilities',
+          'Implement Web Application Firewall (WAF)',
+          'Regular security assessments and penetration testing',
+          'Update to latest software versions',
+          'Monitor for exploit activity'
+        ],
+        scanDuration: `${Math.floor(Math.random() * 300) + 60} seconds`,
+        timestamp: new Date().toISOString()
+      };
+      
+      await storage.updateOsintQuery(query.id, {
+        result: result,
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      res.json({ queryId: query.id, result });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
