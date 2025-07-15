@@ -10,6 +10,7 @@ import { multiFactorAnalyzer } from "./services/multi-factor-analyzer";
 import { enhancedCorrelationEngine } from "./services/enhanced-correlation-engine";
 import { chatbotService } from "./services/chatbot-service";
 import { realTimeIntelligence } from "./services/real-time-intelligence";
+import { threatIntelligenceKB } from "./services/threat-intelligence-kb";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Domain enumeration endpoint
@@ -1303,6 +1304,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Intelligence insights error:', error);
       res.status(500).json({ 
         error: error instanceof Error ? error.message : 'Failed to generate predictive insights'
+      });
+    }
+  });
+
+  // Threat Intelligence Knowledge Base endpoints
+  app.get("/api/intelligence/kb/stats", async (req, res) => {
+    try {
+      await threatIntelligenceKB.initializeKnowledgeBase();
+      const stats = await threatIntelligenceKB.getStatistics();
+      res.json(stats);
+    } catch (error) {
+      console.error('KB stats error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to get knowledge base statistics'
+      });
+    }
+  });
+
+  app.post("/api/intelligence/kb/search", async (req, res) => {
+    try {
+      const { query, filters } = z.object({
+        query: z.string(),
+        filters: z.object({
+          type: z.array(z.string()).optional(),
+          tags: z.array(z.string()).optional(),
+          confidence: z.number().optional(),
+          dateRange: z.object({
+            start: z.string(),
+            end: z.string()
+          }).optional()
+        }).optional()
+      }).parse(req.body);
+
+      await threatIntelligenceKB.initializeKnowledgeBase();
+      const results = await threatIntelligenceKB.searchKnowledgeBase(query, filters);
+      res.json(results);
+    } catch (error) {
+      console.error('KB search error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Knowledge base search failed'
+      });
+    }
+  });
+
+  app.post("/api/intelligence/kb/report", async (req, res) => {
+    try {
+      const { entityId, entityType } = z.object({
+        entityId: z.string(),
+        entityType: z.string()
+      }).parse(req.body);
+
+      await threatIntelligenceKB.initializeKnowledgeBase();
+      const report = await threatIntelligenceKB.generateIntelligenceReport(entityId, entityType);
+      res.json(report);
+    } catch (error) {
+      console.error('KB report generation error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to generate intelligence report'
+      });
+    }
+  });
+
+  app.post("/api/intelligence/kb/correlate", async (req, res) => {
+    try {
+      const { iocValue } = z.object({
+        iocValue: z.string()
+      }).parse(req.body);
+
+      await threatIntelligenceKB.initializeKnowledgeBase();
+      const correlation = await threatIntelligenceKB.correlateIndicators(iocValue);
+      res.json(correlation);
+    } catch (error) {
+      console.error('KB correlation error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to correlate indicators'
+      });
+    }
+  });
+
+  app.get("/api/intelligence/kb/entity/:type/:id", async (req, res) => {
+    try {
+      const { type, id } = req.params;
+      
+      await threatIntelligenceKB.initializeKnowledgeBase();
+      const entity = await threatIntelligenceKB.getEntityById(id, type);
+      
+      if (!entity) {
+        return res.status(404).json({ error: 'Entity not found' });
+      }
+      
+      res.json(entity);
+    } catch (error) {
+      console.error('KB entity retrieval error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to retrieve entity'
+      });
+    }
+  });
+
+  app.post("/api/intelligence/kb/entry", async (req, res) => {
+    try {
+      const entryData = z.object({
+        type: z.enum(['actor', 'campaign', 'vulnerability', 'ioc', 'technique', 'tool']),
+        title: z.string(),
+        content: z.string(),
+        summary: z.string(),
+        tags: z.array(z.string()),
+        confidence: z.number(),
+        sources: z.array(z.string()),
+        relatedEntries: z.array(z.string()),
+        metadata: z.record(z.any())
+      }).parse(req.body);
+
+      await threatIntelligenceKB.initializeKnowledgeBase();
+      const entry = await threatIntelligenceKB.addKnowledgeEntry(entryData);
+      res.json(entry);
+    } catch (error) {
+      console.error('KB entry creation error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to create knowledge entry'
       });
     }
   });

@@ -32,6 +32,7 @@ import ThreatIntelligenceDashboard from "@/components/threat-intelligence-dashbo
 import AIChatbot from "@/components/ai-chatbot";
 import AdvancedVisualization from "@/components/advanced-visualization";
 import RealTimeIntelligenceFeed from "@/components/real-time-intelligence-feed";
+import ThreatIntelligenceKnowledgeBase from "@/components/threat-intelligence-knowledge-base";
 import ResultsPanel from "@/components/results-panel";
 import DisclaimerBanner from "@/components/disclaimer-banner";
 import { useQuery } from "@tanstack/react-query";
@@ -196,10 +197,11 @@ export default function Dashboard() {
                   <AIAnalysis />
                   <AIChatbot />
                 </div>
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
                   <AdvancedVisualization />
                   <RealTimeIntelligenceFeed />
                 </div>
+                <ThreatIntelligenceKnowledgeBase />
               </section>
             )}
 
