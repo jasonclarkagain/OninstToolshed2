@@ -9,6 +9,7 @@ import { aiService } from "./services/ai-service";
 import { multiFactorAnalyzer } from "./services/multi-factor-analyzer";
 import { enhancedCorrelationEngine } from "./services/enhanced-correlation-engine";
 import { chatbotService } from "./services/chatbot-service";
+import { realTimeIntelligence } from "./services/real-time-intelligence";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Domain enumeration endpoint
@@ -1212,6 +1213,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Chatbot clear history error:', error);
       res.status(500).json({ 
         error: error instanceof Error ? error.message : 'Failed to clear conversation history'
+      });
+    }
+  });
+
+  // Real-time Intelligence endpoints
+  app.get("/api/intelligence/feeds", async (req, res) => {
+    try {
+      await realTimeIntelligence.initializeFeeds();
+      const queries = await storage.getUserQueries();
+      
+      await realTimeIntelligence.updateBehavioralPatterns(queries);
+      await realTimeIntelligence.updateAlerts(queries);
+      
+      const data = {
+        feeds: realTimeIntelligence.getFeeds(),
+        alerts: realTimeIntelligence.getAlerts(),
+        patterns: realTimeIntelligence.getBehavioralPatterns()
+      };
+      
+      res.json(data);
+    } catch (error) {
+      console.error('Intelligence feeds error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to load intelligence feeds'
+      });
+    }
+  });
+
+  app.post("/api/intelligence/refresh", async (req, res) => {
+    try {
+      await realTimeIntelligence.initializeFeeds();
+      const queries = await storage.getUserQueries();
+      
+      await realTimeIntelligence.updateBehavioralPatterns(queries);
+      await realTimeIntelligence.updateAlerts(queries);
+      
+      res.json({ message: 'Intelligence feeds refreshed successfully' });
+    } catch (error) {
+      console.error('Intelligence refresh error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to refresh intelligence feeds'
+      });
+    }
+  });
+
+  app.post("/api/intelligence/enrich", async (req, res) => {
+    try {
+      const { queryId } = z.object({
+        queryId: z.number()
+      }).parse(req.body);
+      
+      const query = await storage.getOsintQuery(queryId);
+      if (!query) {
+        return res.status(404).json({ error: 'Query not found' });
+      }
+      
+      const enrichment = await realTimeIntelligence.enrichWithThreatIntelligence(query);
+      
+      // Update query with enriched data
+      await storage.updateOsintQuery(queryId, {
+        result: enrichment.enrichedData,
+        metadata: {
+          ...(query.metadata || {}),
+          threatIntelligence: {
+            matchingFeeds: enrichment.matchingFeeds.length,
+            riskScore: enrichment.riskScore,
+            lastEnriched: new Date().toISOString()
+          }
+        }
+      });
+      
+      res.json(enrichment);
+    } catch (error) {
+      console.error('Intelligence enrichment error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to enrich with threat intelligence'
+      });
+    }
+  });
+
+  app.get("/api/intelligence/insights", async (req, res) => {
+    try {
+      const queries = await storage.getUserQueries();
+      const insights = await realTimeIntelligence.generatePredictiveInsights(queries);
+      
+      res.json(insights);
+    } catch (error) {
+      console.error('Intelligence insights error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to generate predictive insights'
       });
     }
   });

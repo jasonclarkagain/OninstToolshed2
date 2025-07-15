@@ -30,6 +30,8 @@ import MultiFactorAnalysis from "@/components/multi-factor-analysis";
 import CorrelationTest from "@/components/correlation-test";
 import ThreatIntelligenceDashboard from "@/components/threat-intelligence-dashboard";
 import AIChatbot from "@/components/ai-chatbot";
+import AdvancedVisualization from "@/components/advanced-visualization";
+import RealTimeIntelligenceFeed from "@/components/real-time-intelligence-feed";
 import ResultsPanel from "@/components/results-panel";
 import DisclaimerBanner from "@/components/disclaimer-banner";
 import { useQuery } from "@tanstack/react-query";
@@ -190,9 +192,13 @@ export default function Dashboard() {
             {activeSection === "ai-analysis" && (
               <section className="space-y-6">
                 <h2 className="text-2xl font-bold mb-6 text-white">AI Security Analysis</h2>
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
                   <AIAnalysis />
                   <AIChatbot />
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <AdvancedVisualization />
+                  <RealTimeIntelligenceFeed />
                 </div>
               </section>
             )}
