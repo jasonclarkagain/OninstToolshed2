@@ -8,6 +8,7 @@ import { proxyService } from "./services/proxy-service";
 import { aiService } from "./services/ai-service";
 import { multiFactorAnalyzer } from "./services/multi-factor-analyzer";
 import { enhancedCorrelationEngine } from "./services/enhanced-correlation-engine";
+import { chatbotService } from "./services/chatbot-service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Domain enumeration endpoint
@@ -1169,6 +1170,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Dashboard data error:', error);
       res.status(500).json({ 
         error: error instanceof Error ? error.message : 'Dashboard data generation failed'
+      });
+    }
+  });
+
+  // AI Chatbot endpoints
+  app.post("/api/chatbot/message", async (req, res) => {
+    try {
+      const { message, userId } = z.object({
+        message: z.string().min(1),
+        userId: z.number().optional()
+      }).parse(req.body);
+      
+      const response = await chatbotService.processMessage(message, userId);
+      res.json(response);
+    } catch (error) {
+      console.error('Chatbot message error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Chatbot processing failed'
+      });
+    }
+  });
+
+  app.get("/api/chatbot/history", async (req, res) => {
+    try {
+      const history = chatbotService.getConversationHistory();
+      res.json(history);
+    } catch (error) {
+      console.error('Chatbot history error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to get conversation history'
+      });
+    }
+  });
+
+  app.post("/api/chatbot/clear-history", async (req, res) => {
+    try {
+      chatbotService.clearHistory();
+      res.json({ message: 'Conversation history cleared' });
+    } catch (error) {
+      console.error('Chatbot clear history error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to clear conversation history'
       });
     }
   });
