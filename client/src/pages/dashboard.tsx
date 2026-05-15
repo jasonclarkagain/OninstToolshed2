@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shield, Download, History, Settings, TriangleAlert } from "lucide-react";
+import { Shield, Download, History, Settings, LogOut, User } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import Sidebar from "@/components/sidebar";
 import DomainEnumeration from "@/components/tools/domain-enumeration";
 import IpAnalysis from "@/components/tools/ip-analysis";
@@ -40,6 +41,7 @@ import { useMobile } from "@/hooks/use-mobile";
 
 export default function Dashboard() {
   const [activeSection, setActiveSection] = useState("domain-network");
+  const { user, logout } = useAuth();
 
   const { data: queries } = useQuery({
     queryKey: ["/api/osint/queries"],
@@ -75,6 +77,19 @@ export default function Dashboard() {
               <Button variant="outline" size="icon" className="border-[hsl(215,25%,27%)] hover:bg-[hsl(215,25%,27%)] text-white">
                 <Settings className="h-4 w-4" />
               </Button>
+              <div className="flex items-center gap-2 pl-2 border-l border-[hsl(215,14%,34%)]">
+                <User className="h-4 w-4 text-gray-400" />
+                <span className="text-sm text-gray-300 hidden sm:block">{user?.username}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => logout()}
+                  title="Sign out"
+                  className="text-gray-400 hover:text-white hover:bg-[hsl(215,25%,27%)]"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>
