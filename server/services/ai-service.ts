@@ -159,7 +159,7 @@ export class AIService {
           {
             role: "user",
             content: `
-            Security Findings: ${JSON.stringify(findings, null, 2)}
+            Security Findings: ${JSON.stringify(findings, null, 2).slice(0, 8000)}
             
             Please provide security recommendations in JSON format:
             {

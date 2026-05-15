@@ -44,8 +44,8 @@ export interface BehavioralPattern {
 
 export class RealTimeIntelligenceService {
   private feeds: ThreatFeed[] = [];
-  private alerts: IntelligenceAlert[] = [];
-  private behavioralPatterns: BehavioralPattern[] = [];
+  private alertsByUser: Map<number, IntelligenceAlert[]> = new Map();
+  private patternsByUser: Map<number, BehavioralPattern[]> = new Map();
 
   async initializeFeeds(): Promise<void> {
     // Simulate real-time threat intelligence feeds
@@ -411,21 +411,22 @@ export class RealTimeIntelligenceService {
     return this.feeds;
   }
 
-  getAlerts(): IntelligenceAlert[] {
-    return this.alerts;
+  getAlerts(userId: number): IntelligenceAlert[] {
+    return this.alertsByUser.get(userId) ?? [];
   }
 
-  getBehavioralPatterns(): BehavioralPattern[] {
-    return this.behavioralPatterns;
+  getBehavioralPatterns(userId: number): BehavioralPattern[] {
+    return this.patternsByUser.get(userId) ?? [];
   }
 
-  async updateBehavioralPatterns(queries: OsintQuery[]): Promise<void> {
-    this.behavioralPatterns = await this.analyzeUserBehavior(queries);
+  async updateBehavioralPatterns(queries: OsintQuery[], userId: number): Promise<void> {
+    this.patternsByUser.set(userId, await this.analyzeUserBehavior(queries));
   }
 
-  async updateAlerts(queries: OsintQuery[]): Promise<void> {
+  async updateAlerts(queries: OsintQuery[], userId: number): Promise<void> {
     const newAlerts = await this.generateIntelligenceAlerts(queries);
-    this.alerts = [...this.alerts, ...newAlerts].slice(-50); // Keep last 50 alerts
+    const existing = this.alertsByUser.get(userId) ?? [];
+    this.alertsByUser.set(userId, [...existing, ...newAlerts].slice(-50));
   }
 }
 

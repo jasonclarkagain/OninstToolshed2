@@ -1176,7 +1176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ai/chat", requireAuth, requireAiRateLimit, async (req, res) => {
     try {
       const { message } = z.object({
-        message: z.string().min(1)
+        message: z.string().min(1).max(2000)
       }).parse(req.body);
 
       const queries = await storage.getUserQueries(req.session.userId!);
@@ -1200,7 +1200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ai/recommendations", requireAuth, requireAiRateLimit, async (req, res) => {
     try {
       const { findings } = z.object({
-        findings: z.array(z.any())
+        findings: z.array(z.any()).max(20)
       }).parse(req.body);
 
       const recommendations = await aiService.generateSecurityRecommendations(findings);
@@ -1326,7 +1326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/chatbot/message", requireAuth, requireAiRateLimit, async (req, res) => {
     try {
       const { message } = z.object({
-        message: z.string().min(1),
+        message: z.string().min(1).max(2000),
       }).parse(req.body);
       
       const sessionId = req.sessionID;
@@ -1367,16 +1367,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Real-time Intelligence endpoints
   app.get("/api/intelligence/feeds", requireAuth, async (req, res) => {
     try {
+      const userId = req.session.userId!;
       await realTimeIntelligence.initializeFeeds();
-      const queries = await storage.getUserQueries(req.session.userId!);
+      const queries = await storage.getUserQueries(userId);
       
-      await realTimeIntelligence.updateBehavioralPatterns(queries);
-      await realTimeIntelligence.updateAlerts(queries);
+      await realTimeIntelligence.updateBehavioralPatterns(queries, userId);
+      await realTimeIntelligence.updateAlerts(queries, userId);
       
       const data = {
         feeds: realTimeIntelligence.getFeeds(),
-        alerts: realTimeIntelligence.getAlerts(),
-        patterns: realTimeIntelligence.getBehavioralPatterns()
+        alerts: realTimeIntelligence.getAlerts(userId),
+        patterns: realTimeIntelligence.getBehavioralPatterns(userId)
       };
       
       res.json(data);
@@ -1390,11 +1391,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/intelligence/refresh", requireAuth, async (req, res) => {
     try {
+      const userId = req.session.userId!;
       await realTimeIntelligence.initializeFeeds();
-      const queries = await storage.getUserQueries(req.session.userId!);
+      const queries = await storage.getUserQueries(userId);
       
-      await realTimeIntelligence.updateBehavioralPatterns(queries);
-      await realTimeIntelligence.updateAlerts(queries);
+      await realTimeIntelligence.updateBehavioralPatterns(queries, userId);
+      await realTimeIntelligence.updateAlerts(queries, userId);
       
       res.json({ message: 'Intelligence feeds refreshed successfully' });
     } catch (error) {
