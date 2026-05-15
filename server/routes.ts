@@ -36,6 +36,43 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+const aiRateLimitWindows = new Map<number, number[]>();
+const AI_RATE_LIMIT_MAX = 20;
+const AI_RATE_LIMIT_WINDOW_MS = 60_000;
+
+let globalAiRequestCount = 0;
+let globalAiWindowStart = Date.now();
+const GLOBAL_AI_RATE_LIMIT_MAX = 200;
+
+function requireAiRateLimit(req: Request, res: Response, next: NextFunction) {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  const now = Date.now();
+
+  // Global budget — reset each minute
+  if (now - globalAiWindowStart > AI_RATE_LIMIT_WINDOW_MS) {
+    globalAiRequestCount = 0;
+    globalAiWindowStart = now;
+  }
+  if (globalAiRequestCount >= GLOBAL_AI_RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: "AI service temporarily at capacity. Please try again shortly." });
+  }
+
+  // Per-user budget — sliding window
+  const windowStart = now - AI_RATE_LIMIT_WINDOW_MS;
+  const timestamps = (aiRateLimitWindows.get(userId) ?? []).filter(t => t > windowStart);
+  if (timestamps.length >= AI_RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: "Too many AI requests. Please wait before retrying." });
+  }
+
+  globalAiRequestCount += 1;
+  timestamps.push(now);
+  aiRateLimitWindows.set(userId, timestamps);
+  next();
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
@@ -1115,7 +1152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
   // AI Analysis endpoints
-  app.post("/api/ai/analyze", requireAuth, async (req, res) => {
+  app.post("/api/ai/analyze", requireAuth, requireAiRateLimit, async (req, res) => {
     try {
       const queries = await storage.getUserQueries(req.session.userId!);
       const analysis = await aiService.analyzeSecurityData(queries);
@@ -1136,7 +1173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/chat", requireAuth, async (req, res) => {
+  app.post("/api/ai/chat", requireAuth, requireAiRateLimit, async (req, res) => {
     try {
       const { message } = z.object({
         message: z.string().min(1)
@@ -1160,7 +1197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/recommendations", async (req, res) => {
+  app.post("/api/ai/recommendations", requireAuth, requireAiRateLimit, async (req, res) => {
     try {
       const { findings } = z.object({
         findings: z.array(z.any())
@@ -1286,7 +1323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI Chatbot endpoints
-  app.post("/api/chatbot/message", requireAuth, async (req, res) => {
+  app.post("/api/chatbot/message", requireAuth, requireAiRateLimit, async (req, res) => {
     try {
       const { message } = z.object({
         message: z.string().min(1),
@@ -1407,7 +1444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/intelligence/insights", requireAuth, async (req, res) => {
+  app.get("/api/intelligence/insights", requireAuth, requireAiRateLimit, async (req, res) => {
     try {
       const queries = await storage.getUserQueries(req.session.userId!);
       const insights = await realTimeIntelligence.generatePredictiveInsights(queries);
@@ -1422,7 +1459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Threat Intelligence Knowledge Base endpoints
-  app.get("/api/intelligence/kb/stats", async (req, res) => {
+  app.get("/api/intelligence/kb/stats", requireAuth, async (req, res) => {
     try {
       await threatIntelligenceKB.initializeKnowledgeBase();
       const stats = await threatIntelligenceKB.getStatistics();
@@ -1435,7 +1472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/intelligence/kb/search", async (req, res) => {
+  app.post("/api/intelligence/kb/search", requireAuth, async (req, res) => {
     try {
       const { query, filters } = z.object({
         query: z.string(),
@@ -1461,7 +1498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/intelligence/kb/report", async (req, res) => {
+  app.post("/api/intelligence/kb/report", requireAuth, requireAiRateLimit, async (req, res) => {
     try {
       const { entityId, entityType } = z.object({
         entityId: z.string(),
@@ -1479,7 +1516,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/intelligence/kb/correlate", async (req, res) => {
+  app.post("/api/intelligence/kb/correlate", requireAuth, async (req, res) => {
     try {
       const { iocValue } = z.object({
         iocValue: z.string()
@@ -1496,7 +1533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/intelligence/kb/entity/:type/:id", async (req, res) => {
+  app.get("/api/intelligence/kb/entity/:type/:id", requireAuth, async (req, res) => {
     try {
       const { type, id } = req.params;
       
@@ -1516,7 +1553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/intelligence/kb/entry", async (req, res) => {
+  app.post("/api/intelligence/kb/entry", requireAuth, async (req, res) => {
     try {
       const entryData = z.object({
         type: z.enum(['actor', 'campaign', 'vulnerability', 'ioc', 'technique', 'tool']),

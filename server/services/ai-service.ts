@@ -108,9 +108,9 @@ export class AIService {
           {
             role: "user",
             content: `
-            User Query: "${query}"
+            User Query: "${String(query).slice(0, 500)}"
             
-            Available OSINT Data: ${JSON.stringify(osintData.slice(0, 10), null, 2)}
+            Available OSINT Data: ${JSON.stringify(osintData.slice(0, 10).map(q => ({ id: q.id, toolType: q.toolType, query: String(q.query ?? '').slice(0, 200), status: q.status })), null, 2)}
             
             Please interpret this query and provide:
             1. What the user is asking for
@@ -182,13 +182,13 @@ export class AIService {
   }
 
   private buildAnalysisPrompt(queries: OsintQuery[]): string {
-    const queryData = queries.map(q => ({
+    const MAX_QUERIES = 20;
+    const MAX_FIELD_LEN = 200;
+    const queryData = queries.slice(0, MAX_QUERIES).map(q => ({
       id: q.id,
       toolType: q.toolType,
-      query: q.query,
-      result: q.result,
+      query: String(q.query ?? '').slice(0, MAX_FIELD_LEN),
       status: q.status,
-      createdAt: q.createdAt
     }));
 
     return `

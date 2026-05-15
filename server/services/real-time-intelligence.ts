@@ -291,8 +291,7 @@ export class RealTimeIntelligenceService {
     
     Query Data:
     - Total queries: ${queries.length}
-    - Tool types: ${[...new Set(queries.map(q => q.toolType))].join(', ')}
-    - Targets: ${[...new Set(queries.map(q => q.query))].slice(0, 10).join(', ')}
+    - Tool types used: ${[...new Set(queries.map(q => q.toolType))].join(', ')}
     - Time range: ${queries.length > 0 ? 'Recent activity' : 'No data'}
     
     Provide analysis in JSON format:
