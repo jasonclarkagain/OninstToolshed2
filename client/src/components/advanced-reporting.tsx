@@ -410,29 +410,93 @@ export default function AdvancedReporting() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-[hsl(215,25%,27%)] rounded-lg p-4 text-center">
                 <FileText className="h-8 w-8 text-red-400 mx-auto mb-2" />
-                <h4 className="text-white font-medium mb-2">PDF Report</h4>
-                <p className="text-gray-400 text-sm mb-3">Professional formatted report with charts and graphics</p>
-                <Button size="sm" className="w-full bg-red-600 hover:bg-red-700">
+                <h4 className="text-white font-medium mb-2">Text Report</h4>
+                <p className="text-gray-400 text-sm mb-3">Human-readable plain text report of all findings</p>
+                <Button
+                  size="sm"
+                  className="w-full bg-red-600 hover:bg-red-700"
+                  onClick={() => {
+                    if (!queries || queries.length === 0) {
+                      toast({ title: "No data", description: "Run some tools first to generate a report.", variant: "destructive" });
+                      return;
+                    }
+                    const lines = [`OSINT ASSESSMENT REPORT`, `Generated: ${new Date().toLocaleString()}`, `${"=".repeat(60)}`, ""];
+                    queries.forEach((q: any, i: number) => {
+                      lines.push(`[${i + 1}] ${q.toolType?.replace(/_/g, " ").toUpperCase()}`);
+                      lines.push(`    Target: ${q.query}`);
+                      lines.push(`    Status: ${q.status}`);
+                      lines.push(`    Time:   ${new Date(q.createdAt).toLocaleString()}`);
+                      lines.push("");
+                    });
+                    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `osint-report-${new Date().toISOString().slice(0,10)}.txt`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast({ title: "Report downloaded", description: "Text report saved successfully." });
+                  }}
+                >
                   <Download className="h-4 w-4 mr-2" />
-                  Export PDF
+                  Export TXT
                 </Button>
               </div>
 
               <div className="bg-[hsl(215,25%,27%)] rounded-lg p-4 text-center">
                 <FileText className="h-8 w-8 text-blue-400 mx-auto mb-2" />
-                <h4 className="text-white font-medium mb-2">Word Document</h4>
-                <p className="text-gray-400 text-sm mb-3">Editable DOCX format for further customization</p>
-                <Button size="sm" className="w-full bg-blue-600 hover:bg-blue-700">
+                <h4 className="text-white font-medium mb-2">CSV Spreadsheet</h4>
+                <p className="text-gray-400 text-sm mb-3">Open in Excel or Google Sheets for analysis</p>
+                <Button
+                  size="sm"
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  onClick={() => {
+                    if (!queries || queries.length === 0) {
+                      toast({ title: "No data", description: "Run some tools first to generate a report.", variant: "destructive" });
+                      return;
+                    }
+                    const header = "Tool Type,Target,Status,Timestamp";
+                    const rows = queries.map((q: any) =>
+                      `"${q.toolType}","${q.query}","${q.status}","${new Date(q.createdAt).toLocaleString()}"`
+                    );
+                    const csv = [header, ...rows].join("\n");
+                    const blob = new Blob([csv], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `osint-report-${new Date().toISOString().slice(0,10)}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast({ title: "CSV downloaded", description: "Spreadsheet saved successfully." });
+                  }}
+                >
                   <Download className="h-4 w-4 mr-2" />
-                  Export DOCX
+                  Export CSV
                 </Button>
               </div>
 
               <div className="bg-[hsl(215,25%,27%)] rounded-lg p-4 text-center">
                 <FileText className="h-8 w-8 text-green-400 mx-auto mb-2" />
                 <h4 className="text-white font-medium mb-2">JSON Data</h4>
-                <p className="text-gray-400 text-sm mb-3">Raw data export for integration with other tools</p>
-                <Button size="sm" className="w-full bg-green-600 hover:bg-green-700">
+                <p className="text-gray-400 text-sm mb-3">Full raw data export including all result details</p>
+                <Button
+                  size="sm"
+                  className="w-full bg-green-600 hover:bg-green-700"
+                  onClick={() => {
+                    if (!queries || queries.length === 0) {
+                      toast({ title: "No data", description: "Run some tools first to generate a report.", variant: "destructive" });
+                      return;
+                    }
+                    const blob = new Blob([JSON.stringify(queries, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `osint-data-${new Date().toISOString().slice(0,10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast({ title: "JSON downloaded", description: "Full data export saved successfully." });
+                  }}
+                >
                   <Download className="h-4 w-4 mr-2" />
                   Export JSON
                 </Button>
@@ -441,16 +505,43 @@ export default function AdvancedReporting() {
 
             <div className="bg-[hsl(215,25%,27%)] rounded-lg p-4">
               <h4 className="text-white font-medium mb-3">Sharing Options</h4>
-              <div className="flex space-x-3">
-                <Button variant="outline" className="border-[hsl(215,14%,34%)] text-white">
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="outline"
+                  className="border-[hsl(215,14%,34%)] text-white hover:bg-[hsl(215,25%,27%)]"
+                  onClick={() => {
+                    if (!queries || queries.length === 0) {
+                      toast({ title: "No data", description: "Run some tools first.", variant: "destructive" });
+                      return;
+                    }
+                    const summary = queries.map((q: any) =>
+                      `${q.toolType?.replace(/_/g," ")}: ${q.query} (${q.status})`
+                    ).join("\n");
+                    navigator.clipboard.writeText(summary).then(() => {
+                      toast({ title: "Copied to clipboard", description: "Results summary copied. Paste anywhere to share." });
+                    });
+                  }}
+                >
                   <Share className="h-4 w-4 mr-2" />
-                  Generate Shareable Link
+                  Copy Summary to Clipboard
                 </Button>
-                <Button variant="outline" className="border-[hsl(215,14%,34%)] text-white">
+                <Button
+                  variant="outline"
+                  className="border-[hsl(215,14%,34%)] text-white hover:bg-[hsl(215,25%,27%)]"
+                  onClick={() => {
+                    toast({ title: "Email sharing", description: "Connect your email provider in Settings to enable email reports." });
+                  }}
+                >
                   <FileText className="h-4 w-4 mr-2" />
                   Email Report
                 </Button>
-                <Button variant="outline" className="border-[hsl(215,14%,34%)] text-white">
+                <Button
+                  variant="outline"
+                  className="border-[hsl(215,14%,34%)] text-white hover:bg-[hsl(215,25%,27%)]"
+                  onClick={() => {
+                    toast({ title: "Secure delivery", description: "Configure a secure delivery endpoint in Settings." });
+                  }}
+                >
                   <Shield className="h-4 w-4 mr-2" />
                   Secure Delivery
                 </Button>

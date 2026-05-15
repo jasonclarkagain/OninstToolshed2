@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, Download, History, Settings, LogOut, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/sidebar";
 import DomainEnumeration from "@/components/tools/domain-enumeration";
 import IpAnalysis from "@/components/tools/ip-analysis";
@@ -42,6 +43,7 @@ import { useMobile } from "@/hooks/use-mobile";
 export default function Dashboard() {
   const [activeSection, setActiveSection] = useState("domain-network");
   const { user, logout } = useAuth();
+  const { toast } = useToast();
 
   const { data: queries } = useQuery({
     queryKey: ["/api/osint/queries"],
@@ -66,11 +68,21 @@ export default function Dashboard() {
               <h1 className="text-xl font-bold text-white">OSINT Tool Shed</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <Button className="bg-[hsl(207,90%,54%)] hover:bg-blue-600 text-white">
+              <Button
+                className="bg-[hsl(207,90%,54%)] hover:bg-blue-600 text-white"
+                onClick={() => setActiveSection("reporting")}
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Export Report
               </Button>
-              <Button variant="outline" className="border-[hsl(215,25%,27%)] hover:bg-[hsl(215,25%,27%)] text-white">
+              <Button
+                variant="outline"
+                className="border-[hsl(215,25%,27%)] hover:bg-[hsl(215,25%,27%)] text-white"
+                onClick={() => {
+                  document.getElementById("results-panel-anchor")?.scrollIntoView({ behavior: "smooth" });
+                  toast({ title: "Query History", description: "Scroll down to see all past results below." });
+                }}
+              >
                 <History className="h-4 w-4 mr-2" />
                 History
               </Button>
@@ -236,7 +248,9 @@ export default function Dashboard() {
               </section>
             )}
 
-            <ResultsPanel />
+            <div id="results-panel-anchor">
+              <ResultsPanel />
+            </div>
           </div>
         </div>
       </div>
