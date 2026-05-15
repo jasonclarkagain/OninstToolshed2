@@ -10,10 +10,10 @@ export interface IStorage {
   createOsintQuery(query: InsertOsintQuery): Promise<OsintQuery>;
   updateOsintQuery(id: number, updates: Partial<OsintQuery>): Promise<OsintQuery | undefined>;
   getOsintQuery(id: number): Promise<OsintQuery | undefined>;
-  getUserQueries(userId?: number): Promise<OsintQuery[]>;
+  getUserQueries(userId: number): Promise<OsintQuery[]>;
   
   createReport(report: InsertOsintReport): Promise<OsintReport>;
-  getUserReports(userId?: number): Promise<OsintReport[]>;
+  getUserReports(userId: number): Promise<OsintReport[]>;
   
   // Tool configuration management
   getToolConfig(userId: number, toolType: string): Promise<ToolConfig | undefined>;
@@ -79,14 +79,10 @@ export class DatabaseStorage implements IStorage {
     return query || undefined;
   }
 
-  async getUserQueries(userId?: number): Promise<OsintQuery[]> {
-    const query = db.select().from(osintQueries);
-    
-    if (userId) {
-      query.where(eq(osintQueries.userId, userId));
-    }
-    
-    return query.orderBy(desc(osintQueries.createdAt));
+  async getUserQueries(userId: number): Promise<OsintQuery[]> {
+    return db.select().from(osintQueries)
+      .where(eq(osintQueries.userId, userId))
+      .orderBy(desc(osintQueries.createdAt));
   }
 
   async createReport(insertReport: InsertOsintReport): Promise<OsintReport> {
@@ -102,14 +98,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getUserReports(userId?: number): Promise<OsintReport[]> {
-    const query = db.select().from(osintReports);
-    
-    if (userId) {
-      query.where(eq(osintReports.userId, userId));
-    }
-    
-    return query.orderBy(desc(osintReports.exportedAt));
+  async getUserReports(userId: number): Promise<OsintReport[]> {
+    return db.select().from(osintReports)
+      .where(eq(osintReports.userId, userId))
+      .orderBy(desc(osintReports.exportedAt));
   }
 
   async getToolConfig(userId: number, toolType: string): Promise<ToolConfig | undefined> {

@@ -143,6 +143,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
 });
 
 export const insertOsintQuerySchema = createInsertSchema(osintQueries).pick({
+  userId: true,
   toolType: true,
   query: true,
   result: true,
@@ -152,6 +153,7 @@ export const insertOsintQuerySchema = createInsertSchema(osintQueries).pick({
 });
 
 export const insertOsintReportSchema = createInsertSchema(osintReports).pick({
+  userId: true,
   title: true,
   description: true,
   queryIds: true,

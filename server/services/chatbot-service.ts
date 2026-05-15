@@ -52,11 +52,19 @@ export interface ChatbotResponse {
 }
 
 export class ChatbotService {
-  private conversationHistory: ChatMessage[] = [];
+  private sessionHistories: Map<string, ChatMessage[]> = new Map();
 
-  async processMessage(userMessage: string, userId?: number): Promise<ChatbotResponse> {
+  private getHistory(sessionId: string): ChatMessage[] {
+    if (!this.sessionHistories.has(sessionId)) {
+      this.sessionHistories.set(sessionId, []);
+    }
+    return this.sessionHistories.get(sessionId)!;
+  }
+
+  async processMessage(userMessage: string, sessionId: string, userId?: number): Promise<ChatbotResponse> {
+    const history = this.getHistory(sessionId);
     // Add user message to history
-    this.conversationHistory.push({
+    history.push({
       id: Date.now().toString(),
       role: 'user',
       content: userMessage,
@@ -72,13 +80,13 @@ export class ChatbotService {
       
       switch (intent.type) {
         case 'query_execution':
-          response = await this.handleQueryExecution(userMessage, intent);
+          response = await this.handleQueryExecution(userMessage, intent, userId);
           break;
         case 'trend_analysis':
-          response = await this.handleTrendAnalysis(userMessage, intent);
+          response = await this.handleTrendAnalysis(userMessage, intent, userId);
           break;
         case 'data_analysis':
-          response = await this.handleDataAnalysis(userMessage, intent);
+          response = await this.handleDataAnalysis(userMessage, intent, userId);
           break;
         case 'general_conversation':
           response = await this.handleGeneralConversation(userMessage, intent);
@@ -88,7 +96,7 @@ export class ChatbotService {
       }
 
       // Add assistant response to history
-      this.conversationHistory.push({
+      history.push({
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: response.message,
@@ -166,7 +174,7 @@ export class ChatbotService {
     return JSON.parse(response.choices[0].message.content || '{}');
   }
 
-  private async handleQueryExecution(message: string, intent: any): Promise<ChatbotResponse> {
+  private async handleQueryExecution(message: string, intent: any, userId?: number): Promise<ChatbotResponse> {
     const entities = intent.extractedEntities;
     
     // Extract the target from the message
@@ -189,6 +197,7 @@ export class ChatbotService {
     try {
       // Execute the query
       const query = await storage.createOsintQuery({
+        userId,
         toolType,
         query: target,
         status: 'pending',
@@ -231,9 +240,9 @@ export class ChatbotService {
     }
   }
 
-  private async handleTrendAnalysis(message: string, intent: any): Promise<ChatbotResponse> {
+  private async handleTrendAnalysis(message: string, intent: any, userId?: number): Promise<ChatbotResponse> {
     // Get recent queries for trend analysis
-    const recentQueries = await storage.getUserQueries();
+    const recentQueries = userId ? await storage.getUserQueries(userId) : [];
     
     // Generate trend predictions
     const trends = await this.generateTrendPredictions(recentQueries, message);
@@ -267,8 +276,8 @@ export class ChatbotService {
     };
   }
 
-  private async handleDataAnalysis(message: string, intent: any): Promise<ChatbotResponse> {
-    const queries = await storage.getUserQueries();
+  private async handleDataAnalysis(message: string, intent: any, userId?: number): Promise<ChatbotResponse> {
+    const queries = userId ? await storage.getUserQueries(userId) : [];
     
     if (queries.length === 0) {
       return {
@@ -620,12 +629,12 @@ export class ChatbotService {
     return data;
   }
 
-  getConversationHistory(): ChatMessage[] {
-    return this.conversationHistory;
+  getConversationHistory(sessionId: string): ChatMessage[] {
+    return this.getHistory(sessionId);
   }
 
-  clearHistory(): void {
-    this.conversationHistory = [];
+  clearHistory(sessionId: string): void {
+    this.sessionHistories.set(sessionId, []);
   }
 }
 

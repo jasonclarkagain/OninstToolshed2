@@ -1,6 +1,8 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
+import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { promisify } from "util";
 import { storage } from "./storage";
 import { osintService } from "./services/osint";
 import { governmentDataService } from "./services/government-data-service";
@@ -12,9 +14,91 @@ import { chatbotService } from "./services/chatbot-service";
 import { realTimeIntelligence } from "./services/real-time-intelligence";
 import { threatIntelligenceKB } from "./services/threat-intelligence-kb";
 
+const scryptAsync = promisify(scrypt);
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString("hex");
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${buf.toString("hex")}.${salt}`;
+}
+
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const [hashed, salt] = stored.split(".");
+  if (!hashed || !salt) return false;
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return timingSafeEqual(Buffer.from(hashed, "hex"), buf);
+}
+
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.userId) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  next();
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Auth routes
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { username, password, email } = z.object({
+        username: z.string().min(3).max(50),
+        password: z.string().min(8),
+        email: z.string().email().optional(),
+      }).parse(req.body);
+
+      const existing = await storage.getUserByUsername(username);
+      if (existing) {
+        return res.status(409).json({ error: "Username already taken" });
+      }
+
+      const hashed = await hashPassword(password);
+      const user = await storage.createUser({ username, password: hashed, email });
+      req.session.userId = user.id;
+      res.status(201).json({ id: user.id, username: user.username });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Registration failed" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = z.object({
+        username: z.string().min(1),
+        password: z.string().min(1),
+      }).parse(req.body);
+
+      const user = await storage.getUserByUsername(username);
+      if (!user || !(await verifyPassword(password, user.password))) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+
+      req.session.userId = user.id;
+      res.json({ id: user.id, username: user.username });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  app.get("/api/auth/me", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      res.json({ id: user.id, username: user.username, email: user.email, role: user.role });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch user" });
+    }
+  });
   // Domain enumeration endpoint
-  app.post("/api/osint/domain-enumeration", async (req, res) => {
+  app.post("/api/osint/domain-enumeration", requireAuth, async (req, res) => {
     try {
       const { domain, scanType } = z.object({
         domain: z.string().min(1),
@@ -22,6 +106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'domain_enumeration',
         query: domain,
         status: 'pending'
@@ -43,13 +128,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // IP analysis endpoint
-  app.post("/api/osint/ip-analysis", async (req, res) => {
+  app.post("/api/osint/ip-analysis", requireAuth, async (req, res) => {
     try {
       const { ip } = z.object({
         ip: z.string().min(1)
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'ip_analysis',
         query: ip,
         status: 'pending'
@@ -70,13 +156,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // WHOIS lookup endpoint
-  app.post("/api/osint/whois", async (req, res) => {
+  app.post("/api/osint/whois", requireAuth, async (req, res) => {
     try {
       const { domain } = z.object({
         domain: z.string().min(1)
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'whois',
         query: domain,
         status: 'pending'
@@ -97,13 +184,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Username checker endpoint
-  app.post("/api/osint/username-check", async (req, res) => {
+  app.post("/api/osint/username-check", requireAuth, async (req, res) => {
     try {
       const { username } = z.object({
         username: z.string().min(1)
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'username_check',
         query: username,
         status: 'pending'
@@ -124,13 +212,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Email validation endpoint
-  app.post("/api/osint/email-validation", async (req, res) => {
+  app.post("/api/osint/email-validation", requireAuth, async (req, res) => {
     try {
       const { email } = z.object({
         email: z.string().email()
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'email_validation',
         query: email,
         status: 'pending'
@@ -151,13 +240,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Hash analysis endpoint
-  app.post("/api/osint/hash-analysis", async (req, res) => {
+  app.post("/api/osint/hash-analysis", requireAuth, async (req, res) => {
     try {
       const { hash } = z.object({
         hash: z.string().min(1)
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'hash_analysis',
         query: hash,
         status: 'pending'
@@ -206,13 +296,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // URL analysis endpoint
-  app.post("/api/osint/url-analysis", async (req, res) => {
+  app.post("/api/osint/url-analysis", requireAuth, async (req, res) => {
     try {
       const { url } = z.object({
         url: z.string().url()
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'url_analysis',
         query: url,
         status: 'pending'
@@ -249,7 +340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Network tools endpoint
-  app.post("/api/osint/network-tool", async (req, res) => {
+  app.post("/api/osint/network-tool", requireAuth, async (req, res) => {
     try {
       const { tool, target } = z.object({
         tool: z.enum(['ping', 'traceroute', 'port_scan']),
@@ -257,6 +348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: `network_${tool}`,
         query: target,
         status: 'pending'
@@ -277,7 +369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Advanced reconnaissance endpoint
-  app.post("/api/osint/advanced-recon", async (req, res) => {
+  app.post("/api/osint/advanced-recon", requireAuth, async (req, res) => {
     try {
       const { target, scanProfile, selectedModules, customOptions } = z.object({
         target: z.string().min(1),
@@ -287,6 +379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'advanced_recon',
         query: target,
         status: 'pending'
@@ -307,7 +400,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // People search endpoint
-  app.post("/api/osint/people-search", async (req, res) => {
+  app.post("/api/osint/people-search", requireAuth, async (req, res) => {
     try {
       const { firstName, lastName, location, age, email, phone, selectedEngines, includeLexisNexis } = z.object({
         firstName: z.string().optional(),
@@ -321,6 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'people_search',
         query: `${firstName} ${lastName}`.trim(),
         status: 'pending'
@@ -370,7 +464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Geospatial intelligence endpoint
-  app.post("/api/osint/geospatial-intelligence", async (req, res) => {
+  app.post("/api/osint/geospatial-intelligence", requireAuth, async (req, res) => {
     try {
       const { address, coordinates, searchRadius, useProxy, proxyRegion, selectedSources } = z.object({
         address: z.string().optional(),
@@ -385,6 +479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'geospatial_intelligence',
         query: address || `${coordinates?.lat},${coordinates?.lng}`,
         status: 'pending'
@@ -455,9 +550,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all queries
-  app.get("/api/osint/queries", async (req, res) => {
+  app.get("/api/osint/queries", requireAuth, async (req, res) => {
     try {
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       res.json(queries);
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
@@ -465,13 +560,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get specific query
-  app.get("/api/osint/queries/:id", async (req, res) => {
+  app.get("/api/osint/queries/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const query = await storage.getOsintQuery(id);
       
       if (!query) {
         return res.status(404).json({ error: 'Query not found' });
+      }
+
+      if (query.userId !== req.session.userId) {
+        return res.status(403).json({ error: 'Access denied' });
       }
       
       res.json(query);
@@ -481,7 +580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Export report
-  app.post("/api/osint/export-report", async (req, res) => {
+  app.post("/api/osint/export-report", requireAuth, async (req, res) => {
     try {
       const { title, queryIds } = z.object({
         title: z.string().min(1),
@@ -493,7 +592,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         queryIds,
         format: 'json',
         isPublic: false,
-        tags: ['export']
+        tags: ['export'],
+        userId: req.session.userId!,
       });
 
       res.json(report);
@@ -503,9 +603,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get reports
-  app.get("/api/osint/reports", async (req, res) => {
+  app.get("/api/osint/reports", requireAuth, async (req, res) => {
     try {
-      const reports = await storage.getUserReports();
+      const reports = await storage.getUserReports(req.session.userId!);
       res.json(reports);
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
@@ -513,7 +613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // WiFi password cracking endpoint
-  app.post("/api/osint/wifi-crack", async (req, res) => {
+  app.post("/api/osint/wifi-crack", requireAuth, async (req, res) => {
     try {
       const { target, interface: wifiInterface, attackType, wordlist, customWordlist, handshakeFile } = z.object({
         target: z.string().min(1),
@@ -525,6 +625,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'wifi_crack',
         query: target,
         status: 'pending'
@@ -560,7 +661,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // WiFi security scanning endpoint
-  app.post("/api/osint/wifi-security", async (req, res) => {
+  app.post("/api/osint/wifi-security", requireAuth, async (req, res) => {
     try {
       const { scanType, interface: wifiInterface, target } = z.object({
         scanType: z.string().default("passive"),
@@ -569,6 +670,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'wifi_security',
         query: target || 'WiFi Security Scan',
         status: 'pending'
@@ -617,7 +719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Metasploit framework interface endpoint
-  app.post("/api/osint/metasploit", async (req, res) => {
+  app.post("/api/osint/metasploit", requireAuth, async (req, res) => {
     try {
       const { target, exploitModule, payload, options, sessionId } = z.object({
         target: z.string().min(1),
@@ -628,6 +730,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'metasploit',
         query: target,
         status: 'pending'
@@ -675,7 +778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Social Engineering Toolkit endpoint
-  app.post("/api/osint/social-engineering", async (req, res) => {
+  app.post("/api/osint/social-engineering", requireAuth, async (req, res) => {
     try {
       const { target, attackType, template, payload, customMessage } = z.object({
         target: z.string().min(1),
@@ -686,6 +789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'social_engineering',
         query: target,
         status: 'pending'
@@ -744,7 +848,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // OSINT Framework integration endpoint
-  app.post("/api/osint/osint-framework", async (req, res) => {
+  app.post("/api/osint/osint-framework", requireAuth, async (req, res) => {
     try {
       const { target, category } = z.object({
         target: z.string().min(1),
@@ -752,6 +856,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'osint_framework',
         query: target,
         status: 'pending'
@@ -816,7 +921,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vulnerability database scanner endpoint
-  app.post("/api/osint/vulnerability-scan", async (req, res) => {
+  app.post("/api/osint/vulnerability-scan", requireAuth, async (req, res) => {
     try {
       const { target, scanType } = z.object({
         target: z.string().min(1),
@@ -824,6 +929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'vulnerability_scan',
         query: target,
         status: 'pending'
@@ -902,7 +1008,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Advanced reporting endpoint
-  app.post("/api/osint/generate-report", async (req, res) => {
+  app.post("/api/osint/generate-report", requireAuth, async (req, res) => {
     try {
       const reportConfig = z.object({
         title: z.string(),
@@ -919,6 +1025,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const report = await storage.createReport({
+        userId: req.session.userId!,
         title: reportConfig.title,
         queryIds: [],
         format: reportConfig.format,
@@ -937,7 +1044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Workflow automation endpoint
-  app.post("/api/osint/run-workflow", async (req, res) => {
+  app.post("/api/osint/run-workflow", requireAuth, async (req, res) => {
     try {
       const { workflowId } = z.object({
         workflowId: z.string()
@@ -959,6 +1066,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create a query to track the workflow execution
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'workflow_automation',
         query: `Workflow: ${workflowId}`,
         status: 'completed',
@@ -976,7 +1084,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Kali Linux VM terminal endpoint
-  app.post("/api/osint/kali-vm", async (req, res) => {
+  app.post("/api/osint/kali-vm", requireAuth, async (req, res) => {
     try {
       const { command, directory } = z.object({
         command: z.string().min(1),
@@ -984,6 +1092,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const query = await storage.createOsintQuery({
+        userId: req.session.userId!,
         toolType: 'kali_vm',
         query: command,
         status: 'pending'
@@ -1006,9 +1115,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
   // AI Analysis endpoints
-  app.post("/api/ai/analyze", async (req, res) => {
+  app.post("/api/ai/analyze", requireAuth, async (req, res) => {
     try {
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       const analysis = await aiService.analyzeSecurityData(queries);
       
       res.json(analysis);
@@ -1027,13 +1136,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/chat", async (req, res) => {
+  app.post("/api/ai/chat", requireAuth, async (req, res) => {
     try {
       const { message } = z.object({
         message: z.string().min(1)
       }).parse(req.body);
 
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       const response = await aiService.processNaturalLanguageQuery(message, queries);
       
       res.json(response);
@@ -1075,7 +1184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Multi-Factor Analysis endpoints
-  app.post("/api/multi-factor/analyze", async (req, res) => {
+  app.post("/api/multi-factor/analyze", requireAuth, async (req, res) => {
     try {
       const config = z.object({
         timeRange: z.string().optional(),
@@ -1083,7 +1192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         analysisType: z.string().optional()
       }).parse(req.body);
 
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       const analysis = await multiFactorAnalyzer.analyzeQueries(queries, config);
       
       res.json(analysis);
@@ -1095,11 +1204,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/multi-factor/correlations", async (req, res) => {
+  app.get("/api/multi-factor/correlations", requireAuth, async (req, res) => {
     try {
       const { minConfidence = 75 } = req.query;
       
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       const analysis = await multiFactorAnalyzer.analyzeQueries(queries, {
         minConfidence: Number(minConfidence)
       });
@@ -1113,9 +1222,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/multi-factor/patterns", async (req, res) => {
+  app.get("/api/multi-factor/patterns", requireAuth, async (req, res) => {
     try {
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       const analysis = await multiFactorAnalyzer.analyzeQueries(queries);
       
       res.json({ patterns: analysis.patterns });
@@ -1128,11 +1237,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Enhanced Threat Intelligence endpoints
-  app.post("/api/threat-intelligence/analyze", async (req, res) => {
+  app.post("/api/threat-intelligence/analyze", requireAuth, async (req, res) => {
     try {
       const { comprehensive = false } = req.body;
       
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       const analysis = await enhancedCorrelationEngine.performDeepAnalysis(queries);
       
       res.json(analysis);
@@ -1144,9 +1253,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/threat-intelligence/dashboard", async (req, res) => {
+  app.get("/api/threat-intelligence/dashboard", requireAuth, async (req, res) => {
     try {
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       
       // Generate comprehensive threat intelligence
       const analysis = await enhancedCorrelationEngine.performDeepAnalysis(queries);
@@ -1177,14 +1286,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI Chatbot endpoints
-  app.post("/api/chatbot/message", async (req, res) => {
+  app.post("/api/chatbot/message", requireAuth, async (req, res) => {
     try {
-      const { message, userId } = z.object({
+      const { message } = z.object({
         message: z.string().min(1),
-        userId: z.number().optional()
       }).parse(req.body);
       
-      const response = await chatbotService.processMessage(message, userId);
+      const sessionId = req.sessionID;
+      const response = await chatbotService.processMessage(message, sessionId, req.session.userId);
       res.json(response);
     } catch (error) {
       console.error('Chatbot message error:', error);
@@ -1194,9 +1303,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/chatbot/history", async (req, res) => {
+  app.get("/api/chatbot/history", requireAuth, async (req, res) => {
     try {
-      const history = chatbotService.getConversationHistory();
+      const history = chatbotService.getConversationHistory(req.sessionID);
       res.json(history);
     } catch (error) {
       console.error('Chatbot history error:', error);
@@ -1206,9 +1315,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/chatbot/clear-history", async (req, res) => {
+  app.post("/api/chatbot/clear-history", requireAuth, async (req, res) => {
     try {
-      chatbotService.clearHistory();
+      chatbotService.clearHistory(req.sessionID);
       res.json({ message: 'Conversation history cleared' });
     } catch (error) {
       console.error('Chatbot clear history error:', error);
@@ -1219,10 +1328,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Real-time Intelligence endpoints
-  app.get("/api/intelligence/feeds", async (req, res) => {
+  app.get("/api/intelligence/feeds", requireAuth, async (req, res) => {
     try {
       await realTimeIntelligence.initializeFeeds();
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       
       await realTimeIntelligence.updateBehavioralPatterns(queries);
       await realTimeIntelligence.updateAlerts(queries);
@@ -1242,10 +1351,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/intelligence/refresh", async (req, res) => {
+  app.post("/api/intelligence/refresh", requireAuth, async (req, res) => {
     try {
       await realTimeIntelligence.initializeFeeds();
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       
       await realTimeIntelligence.updateBehavioralPatterns(queries);
       await realTimeIntelligence.updateAlerts(queries);
@@ -1259,7 +1368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/intelligence/enrich", async (req, res) => {
+  app.post("/api/intelligence/enrich", requireAuth, async (req, res) => {
     try {
       const { queryId } = z.object({
         queryId: z.number()
@@ -1268,6 +1377,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const query = await storage.getOsintQuery(queryId);
       if (!query) {
         return res.status(404).json({ error: 'Query not found' });
+      }
+
+      if (query.userId !== req.session.userId) {
+        return res.status(403).json({ error: 'Access denied' });
       }
       
       const enrichment = await realTimeIntelligence.enrichWithThreatIntelligence(query);
@@ -1294,9 +1407,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/intelligence/insights", async (req, res) => {
+  app.get("/api/intelligence/insights", requireAuth, async (req, res) => {
     try {
-      const queries = await storage.getUserQueries();
+      const queries = await storage.getUserQueries(req.session.userId!);
       const insights = await realTimeIntelligence.generatePredictiveInsights(queries);
       
       res.json(insights);
