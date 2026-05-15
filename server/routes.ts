@@ -36,6 +36,35 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Login brute-force protection
+const LOGIN_WINDOW_MS = 15 * 60_000; // 15-minute window
+const LOGIN_MAX_PER_IP = 20;         // max attempts per IP per window
+const LOGIN_MAX_PER_ACCOUNT = 10;    // max failed attempts per username per window
+const loginIpWindows = new Map<string, number[]>();
+const loginAccountWindows = new Map<string, number[]>();
+
+function recordLoginIpAttempt(ip: string): void {
+  const now = Date.now();
+  const cutoff = now - LOGIN_WINDOW_MS;
+  loginIpWindows.set(ip, [...(loginIpWindows.get(ip) ?? []).filter(t => t > cutoff), now]);
+}
+
+function recordLoginAccountFailure(username: string): void {
+  const now = Date.now();
+  const cutoff = now - LOGIN_WINDOW_MS;
+  loginAccountWindows.set(username, [...(loginAccountWindows.get(username) ?? []).filter(t => t > cutoff), now]);
+}
+
+function isLoginRateLimited(ip: string, username: string): boolean {
+  const now = Date.now();
+  const cutoff = now - LOGIN_WINDOW_MS;
+  const ipCount = (loginIpWindows.get(ip) ?? []).filter(t => t > cutoff).length;
+  if (ipCount >= LOGIN_MAX_PER_IP) return true;
+  const accountCount = (loginAccountWindows.get(username) ?? []).filter(t => t > cutoff).length;
+  if (accountCount >= LOGIN_MAX_PER_ACCOUNT) return true;
+  return false;
+}
+
 const aiRateLimitWindows = new Map<number, number[]>();
 const AI_RATE_LIMIT_MAX = 20;
 const AI_RATE_LIMIT_WINDOW_MS = 60_000;
@@ -90,6 +119,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const hashed = await hashPassword(password);
       const user = await storage.createUser({ username, password: hashed, email });
+      await new Promise<void>((resolve, reject) => {
+        req.session.regenerate((err) => (err ? reject(err) : resolve()));
+      });
       req.session.userId = user.id;
       res.status(201).json({ id: user.id, username: user.username });
     } catch (error) {
@@ -104,11 +136,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: z.string().min(1),
       }).parse(req.body);
 
+      const ip = req.ip ?? "unknown";
+
+      if (isLoginRateLimited(ip, username)) {
+        return res.status(429).json({ error: "Too many login attempts. Please wait before trying again." });
+      }
+
+      recordLoginIpAttempt(ip);
+
       const user = await storage.getUserByUsername(username);
-      if (!user || !(await verifyPassword(password, user.password))) {
+      const credentialsValid = user && (await verifyPassword(password, user.password));
+      if (!credentialsValid) {
+        recordLoginAccountFailure(username);
         return res.status(401).json({ error: "Invalid username or password" });
       }
 
+      await new Promise<void>((resolve, reject) => {
+        req.session.regenerate((err) => (err ? reject(err) : resolve()));
+      });
       req.session.userId = user.id;
       res.json({ id: user.id, username: user.username });
     } catch (error) {
